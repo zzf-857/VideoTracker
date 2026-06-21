@@ -4,10 +4,10 @@
   "description": "",
   "main": "dist-electron/index.js",
   "scripts": {
-    "build:main": "esbuild src/main/index.ts src/main/preload.ts --bundle --platform=node --external=electron --outdir=dist-electron",
+    "build:main": "esbuild src/main/index.ts src/main/preload.ts --bundle --platform=node --external:electron --outdir=dist-electron",
     "build:renderer": "vite build",
     "build": "npm run build:main && npm run build:renderer",
-    "dev:main": "esbuild src/main/index.ts src/main/preload.ts --bundle --platform=node --external=electron --outdir=dist-electron --watch",
+    "dev:main": "esbuild src/main/index.ts src/main/preload.ts --bundle --platform=node --external:electron --outdir=dist-electron --watch",
     "dev:renderer": "vite",
     "dev": "concurrently -k -r -n \"main,renderer,app\" -c \"magenta,cyan,blue\" \"npm run dev:main\" \"npm run dev:renderer\" \"electron .\""
   },
@@ -23,6 +23,7 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
