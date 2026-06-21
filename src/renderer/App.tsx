@@ -60,6 +60,8 @@ export default function App() {
   const [appData, setAppData] = useState<AppDataStore | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.25);
   const [currentSource, setCurrentSource] = useState<MediaSourceConfig | null>(null);
+  const currentSourceRef = useRef<MediaSourceConfig | null>(null);
+  currentSourceRef.current = currentSource;
   
   // 当前播放视频信息
   const [activeVideoUrl, setActiveVideoUrl] = useState<string>('');
@@ -294,14 +296,21 @@ export default function App() {
 
   // 加载数据源与启动自动恢复
   useEffect(() => {
+    let active = true;
+    console.log('[AutoRestore] useEffect triggered. refreshSignal:', refreshSignal);
     storageService.loadData().then(data => {
+      if (!active) return;
       setAppData(data);
       setSources(data.sources);
+      
+      console.log('[AutoRestore] Loaded appData. lastPlayedVideo:', data.lastPlayedVideo);
       
       // 检查是否有上一次播放的视频且尚未执行过自动恢复
       if (!hasAutoRestored.current && data.lastPlayedVideo && data.sources.length > 0) {
         const lastVid = data.lastPlayedVideo;
         let matchingSource = data.sources.find(s => s.id === lastVid.sourceId);
+        
+        console.log('[AutoRestore] Initial check. matchingSource by ID:', matchingSource?.name);
         
         // 健壮防错：统一转换为小写与正斜杠进行比对，防止 Windows 下盘符大小写或反斜杠带来的字符比对不一致问题
         const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
@@ -309,6 +318,7 @@ export default function App() {
         
         if (!matchingSource || (matchingSource.type === 'local' && !normVidPath.startsWith(normalizePath(matchingSource.path)))) {
           const pathMatched = data.sources.find(s => s.type === 'local' && normVidPath.startsWith(normalizePath(s.path)));
+          console.log('[AutoRestore] Path matching fallback result:', pathMatched?.name);
           if (pathMatched) {
             matchingSource = pathMatched;
           }
@@ -316,10 +326,13 @@ export default function App() {
 
         if (matchingSource) {
           hasAutoRestored.current = true;
+          console.log('[AutoRestore] Applying source:', matchingSource.name);
           setCurrentSource(matchingSource);
           
           // 获取上次视频的流地址并自动加载
           getVideoStreamUrlByPath(lastVid.path, matchingSource).then(url => {
+            if (!active) return;
+            console.log('[AutoRestore] Resolved stream URL:', url);
             if (url) {
               setActiveVideoUrl(url);
               setActiveVideoPath(lastVid.path);
@@ -334,15 +347,22 @@ export default function App() {
       }
 
       if (data.sources.length > 0) {
-        const exists = data.sources.some(s => s.id === currentSource?.id);
-        if (!currentSource || !exists) {
+        const currentSourceVal = currentSourceRef.current;
+        const exists = data.sources.some(s => s.id === currentSourceVal?.id);
+        console.log('[AutoRestore] Fallback path. exists:', exists, 'currentSource:', currentSourceVal?.name);
+        if (!currentSourceVal || !exists) {
+          console.log('[AutoRestore] Setting default source:', data.sources[0].name);
           setCurrentSource(data.sources[0]);
         }
       } else {
         setCurrentSource(null);
       }
     });
-  }, [refreshSignal, currentSource]);
+
+    return () => {
+      active = false;
+    };
+  }, [refreshSignal]);
 
   // 加载当前源下的首层文件树
   useEffect(() => {
