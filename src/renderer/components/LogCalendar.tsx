@@ -11,7 +11,6 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [streakDays, setStreakDays] = useState(0);
   const [sources, setSources] = useState<MediaSourceConfig[]>([]);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; dateStr: string; videoPath: string } | null>(null);
 
   useEffect(() => {
     storageService.loadData().then(data => {
@@ -25,13 +24,6 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
       calculateStreak(data.dailyLogs);
     });
   }, [refreshSignal]);
-
-  // 全局点击关闭右键菜单
-  useEffect(() => {
-    const handleCloseMenu = () => setContextMenu(null);
-    window.addEventListener('click', handleCloseMenu);
-    return () => window.removeEventListener('click', handleCloseMenu);
-  }, []);
 
   // 计算 GitHub 贡献连续学习天数
   const calculateStreak = (logs: Record<string, DailyLog>) => {
@@ -147,23 +139,7 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
     return '本地源';
   };
 
-  // 触发右键菜单
-  const handleContextMenu = (e: React.MouseEvent, dateStr: string, videoPath: string) => {
-    e.preventDefault();
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      dateStr,
-      videoPath
-    });
-  };
 
-  // 执行删除观看记录
-  const handleDeleteVideoLog = async (dateStr: string, videoPath: string) => {
-    if (!confirm('确定要删除该条观看记录吗？此操作将扣减当天的学习时间。')) return;
-    await storageService.deleteVideoLog(dateStr, videoPath);
-    onRefresh();
-  };
 
   const heatmapCells = getHeatmapGrid();
   const selectedLog = dailyLogs[selectedDate];
@@ -228,9 +204,7 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
                 {selectedLog.playedVideos.map((video, idx) => (
                   <div 
                     key={idx} 
-                    onContextMenu={(e) => handleContextMenu(e, selectedDate, video.path)}
                     className="p-3 bg-white border border-black/5 rounded-xl flex items-center justify-between hover:shadow-sm transition-all relative select-none cursor-default"
-                    title="右键可删除该记录"
                   >
                     <div className="flex flex-col flex-1 min-w-0 pr-3">
                       <span className="text-xs font-semibold text-on-surface truncate">{video.name}</span>
@@ -256,27 +230,6 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
           )}
         </div>
       </div>
-
-      {/* 右键浮动上下文菜单 */}
-      {contextMenu && (
-        <div 
-          className="fixed bg-white border border-black/10 rounded-xl shadow-lg py-1 z-[200] min-w-28 text-xs text-red-500 animate-fade-in"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-          onMouseLeave={() => setContextMenu(null)}
-        >
-          <button 
-            onClick={() => {
-              handleDeleteVideoLog(contextMenu.dateStr, contextMenu.videoPath);
-              setContextMenu(null);
-            }}
-            className="w-full px-3 py-2 text-left hover:bg-red-50 flex items-center gap-1.5 cursor-pointer font-bold transition-colors"
-          >
-            <span className="material-symbols-outlined text-[14px]">delete</span>
-            删除该记录
-          </button>
-        </div>
-      )}
     </div>
   );
 }
