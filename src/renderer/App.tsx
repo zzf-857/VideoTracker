@@ -153,7 +153,20 @@ export default function App() {
         currentSource.settings?.password
       );
       
-      client.readDir()
+      let startPath = '';
+      if (currentSource.path) {
+        try {
+          if (currentSource.path.startsWith('http://') || currentSource.path.startsWith('https://')) {
+            startPath = new URL(currentSource.path).pathname;
+          } else {
+            startPath = currentSource.path;
+          }
+        } catch {
+          startPath = currentSource.path;
+        }
+      }
+
+      client.readDir(startPath)
         .then((files: any[]) => {
           const tree: TreeNode[] = files.map(f => ({
             name: f.name,
@@ -249,7 +262,12 @@ export default function App() {
       } else {
         parsedUrl.pathname = `${urlPath}${relative}`;
       }
-      return parsedUrl.toString();
+      
+      const remoteUrl = parsedUrl.toString();
+      if ('electronAPI' in window) {
+        return await (window as any).electronAPI.getVideoStreamUrl(remoteUrl);
+      }
+      return remoteUrl;
     }
   };
 

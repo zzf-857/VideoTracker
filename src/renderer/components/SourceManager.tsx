@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { storageService, MediaSourceConfig } from '../services/storage';
-import { WebDAVClient } from '../services/webdav';
+import { WebDAVClient, WebDAVFile } from '../services/webdav';
 
 interface SourceManagerProps {
   refreshSignal: number;
@@ -20,11 +20,66 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
   const [webdavUser, setWebdavUser] = useState('');
   const [webdavPassword, setWebdavPassword] = useState('');
 
+  // 文件夹浏览器相关状态
+  const [folderBrowserOpen, setFolderBrowserOpen] = useState(false);
+  const [currentBrowsePath, setCurrentBrowsePath] = useState('');
+  const [breadcrumbs, setBreadcrumbs] = useState<{ name: string; path: string }[]>([]);
+  const [browserItems, setBrowserItems] = useState<WebDAVFile[]>([]);
+  const [browserLoading, setBrowserLoading] = useState(false);
+  const [selectedPath, setSelectedPath] = useState('');
+
   useEffect(() => {
     storageService.loadData().then(data => {
       setSources(data.sources);
     });
   }, [refreshSignal]);
+
+  // 加载 WebDAV 指定路径目录
+  const loadWebDAVFolder = async (path: string) => {
+    setBrowserLoading(true);
+    const client = new WebDAVClient(webdavUrl, webdavUser, webdavPassword);
+    try {
+      const files = await client.readDir(path);
+      setBrowserItems(files);
+      setCurrentBrowsePath(path);
+
+      // 计算面包屑
+      let basePath = '';
+      try {
+        basePath = new URL(webdavUrl).pathname;
+      } catch {}
+      if (basePath.endsWith('/')) basePath = basePath.slice(0, -1);
+
+      let relativePath = path;
+      if (basePath && path.startsWith(basePath)) {
+        relativePath = path.substring(basePath.length);
+      }
+
+      const parts = relativePath.split('/').filter(Boolean);
+      const crumbs = [{ name: '根目录', path: basePath || '/' }];
+
+      let currentAcc = basePath || '';
+      for (const part of parts) {
+        currentAcc = `${currentAcc.endsWith('/') ? currentAcc.slice(0, -1) : currentAcc}/${part}`;
+        crumbs.push({ name: part, path: currentAcc });
+      }
+      setBreadcrumbs(crumbs);
+    } catch (err) {
+      console.error('Failed to load folder:', err);
+      alert('无法读取该目录');
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowseInto = (item: WebDAVFile) => {
+    if (!item.isDir) return;
+    loadWebDAVFolder(item.path);
+  };
+
+  const handleBreadcrumbClick = (crumbPath: string) => {
+    loadWebDAVFolder(crumbPath);
+  };
 
   // 选择本地文件夹 (Electron 专享 API)
   const handleSelectFolder = async () => {
@@ -53,6 +108,17 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
     const client = new WebDAVClient(webdavUrl, webdavUser, webdavPassword);
     const success = await client.testConnection();
     setTestStatus(success ? 'success' : 'failed');
+
+    if (success) {
+      setFolderBrowserOpen(true);
+      let basePath = '';
+      try {
+        basePath = new URL(webdavUrl).pathname;
+      } catch {}
+      await loadWebDAVFolder(basePath || '');
+    } else {
+      setFolderBrowserOpen(false);
+    }
   };
 
   // 保存挂载源
@@ -77,7 +143,8 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
         alert('请输入服务地址');
         return;
       }
-      sourcePath = webdavUrl;
+      const client = new WebDAVClient(webdavUrl, webdavUser, webdavPassword);
+      sourcePath = client.resolveUrl(selectedPath);
       settings = {
         url: webdavUrl,
         username: webdavUser,
@@ -120,6 +187,11 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
     setWebdavUser('');
     setWebdavPassword('');
     setTestStatus('idle');
+    setFolderBrowserOpen(false);
+    setCurrentBrowsePath('');
+    setBreadcrumbs([]);
+    setBrowserItems([]);
+    setSelectedPath('');
     setIsModalOpen(false);
   };
 
@@ -317,6 +389,85 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
                     {testStatus === 'success' && <span className="text-xs text-green-400 font-bold flex items-center gap-1">✔ 连接成功</span>}
                     {testStatus === 'failed' && <span className="text-xs text-red-400 font-bold flex items-center gap-1">❌ 连接失败</span>}
                   </div>
+
+                  {/* 文件夹浏览器 */}
+                  {folderBrowserOpen && (
+                    <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10 space-y-3">
+                      <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                        <span className="text-xs font-bold text-white/70">选择视频所在文件夹</span>
+                        <button
+                          type="button"
+                          onClick={handleSelectCurrentDir}
+                          className="px-3 py-1 bg-primary hover:bg-primary/95 text-white text-[11px] font-bold rounded-lg transition-all"
+                        >
+                          选择当前目录
+                        </button>
+                      </div>
+
+                      {/* 面包屑导航 */}
+                      <div className="flex flex-wrap items-center gap-1 text-[11px] text-white/60">
+                        {breadcrumbs.map((crumb, idx) => (
+                          <React.Fragment key={idx}>
+                            {idx > 0 && <span className="text-white/30">/</span>}
+                            <button
+                              type="button"
+                              onClick={() => handleBreadcrumbClick(crumb.path)}
+                              className={`hover:text-white hover:underline transition-all ${
+                                idx === breadcrumbs.length - 1 ? 'text-primary font-bold' : ''
+                              }`}
+                            >
+                              {crumb.name}
+                            </button>
+                          </React.Fragment>
+                        ))}
+                      </div>
+
+                      {/* 文件夹/视频列表 */}
+                      <div className="max-h-[160px] overflow-y-auto custom-scrollbar border border-white/5 rounded-lg bg-black/20 text-xs">
+                        {browserLoading ? (
+                          <div className="flex items-center justify-center py-8 text-white/60">
+                            <span className="animate-spin mr-2">⏳</span> 正在读取目录...
+                          </div>
+                        ) : browserItems.length > 0 ? (
+                          <div className="divide-y divide-white/5">
+                            {browserItems.map((item, idx) => (
+                              <div
+                                key={idx}
+                                onClick={() => item.isDir && handleBrowseInto(item)}
+                                className={`flex items-center gap-2 px-3 py-2 transition-all ${
+                                  item.isDir
+                                    ? 'hover:bg-white/10 cursor-pointer text-white font-medium'
+                                    : 'text-white/40 cursor-not-allowed'
+                                }`}
+                              >
+                                <span className={`material-symbols-outlined text-[16px] ${item.isDir ? 'text-primary' : 'text-white/30'}`}>
+                                  {item.isDir ? 'folder' : 'movie'}
+                                </span>
+                                <span className="truncate flex-1">{item.name}</span>
+                                {item.isDir && (
+                                  <span className="material-symbols-outlined text-[12px] text-white/30">
+                                    chevron_right
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-8 text-white/40">
+                            <span className="material-symbols-outlined text-xl mb-1">folder_open</span>
+                            <span>空目录或没有支持的视频文件</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 当前选中的路径反馈 */}
+                      {selectedPath && (
+                        <div className="text-[11px] text-green-400 bg-green-500/10 border border-green-500/20 p-2 rounded-lg truncate">
+                          已选择: {selectedPath}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -37,9 +37,49 @@ function startStreamServer() {
         return;
       }
 
-      // 解码绝对路径 (并容错处理被 URL 转换器把 '+' 解析为空格的情况)
       const cleanBase64 = filePathQuery.replace(/ /g, '+');
       const decodedPath = Buffer.from(cleanBase64, 'base64').toString('utf-8');
+      
+      if (decodedPath.startsWith('http://') || decodedPath.startsWith('https://')) {
+        const remoteUrl = new URL(decodedPath);
+        const headers: Record<string, string> = {};
+        
+        if (req.headers.range) {
+          headers['Range'] = req.headers.range;
+        }
+        
+        if (remoteUrl.username || remoteUrl.password) {
+          const username = decodeURIComponent(remoteUrl.username);
+          const password = decodeURIComponent(remoteUrl.password);
+          const creds = Buffer.from(`${username}:${password}`).toString('base64');
+          headers['Authorization'] = `Basic ${creds}`;
+          
+          remoteUrl.username = '';
+          remoteUrl.password = '';
+        }
+
+        const protocol = remoteUrl.protocol === 'https:' ? require('https') : require('http');
+        const proxyReq = protocol.request(remoteUrl.toString(), {
+          method: 'GET',
+          headers: headers
+        }, (proxyRes: any) => {
+          res.writeHead(proxyRes.statusCode, proxyRes.headers);
+          proxyRes.pipe(res);
+        });
+
+        proxyReq.on('error', (err: any) => {
+          console.error('WebDAV stream proxy error:', err);
+          res.writeHead(500);
+          res.end(err.message || 'WebDAV proxy error');
+        });
+
+        req.on('close', () => {
+          proxyReq.destroy();
+        });
+
+        req.pipe(proxyReq);
+        return;
+      }
       
       if (!fs.existsSync(decodedPath)) {
         res.writeHead(404);

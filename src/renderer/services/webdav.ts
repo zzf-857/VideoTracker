@@ -49,10 +49,34 @@ export class WebDAVClient {
     }
   }
 
+  // 解析子路径为完整 URL，防止路径段（如 /dav）重复拼接
+  resolveUrl(subPath: string): string {
+    if (!subPath) return this.url;
+    if (subPath.startsWith('http://') || subPath.startsWith('https://')) {
+      return subPath;
+    }
+    
+    let baseUriPath = '';
+    let origin = this.url;
+    try {
+      const u = new URL(this.url);
+      baseUriPath = u.pathname;
+      origin = u.origin;
+    } catch {}
+
+    const cleanBase = baseUriPath.endsWith('/') ? baseUriPath.slice(0, -1) : baseUriPath;
+    const cleanSub = subPath.startsWith('/') ? subPath : `/${subPath}`;
+    
+    if (cleanSub.startsWith(cleanBase)) {
+      return `${origin}${cleanSub}`;
+    } else {
+      return `${origin}${cleanBase}${cleanSub}`;
+    }
+  }
+
   // 2. 浏览指定路径下的目录结构 (Depth: 1)
   async readDir(subPath: string = ''): Promise<WebDAVFile[]> {
-    const cleanSubPath = subPath.startsWith('/') ? subPath : `/${subPath}`;
-    const targetUrl = subPath ? `${this.url}${cleanSubPath}` : this.url;
+    const targetUrl = this.resolveUrl(subPath);
 
     try {
       const response = await fetch(targetUrl, {

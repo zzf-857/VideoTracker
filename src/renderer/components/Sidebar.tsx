@@ -300,7 +300,12 @@ export default function Sidebar({
         parsedUrl.pathname = `${urlPath}${relative}`;
       }
       
-      url = parsedUrl.toString();
+      const remoteUrl = parsedUrl.toString();
+      if ('electronAPI' in window) {
+        url = await (window as any).electronAPI.getVideoStreamUrl(remoteUrl);
+      } else {
+        url = remoteUrl;
+      }
     }
 
     onSelectVideo(url, node.path, node.name);
