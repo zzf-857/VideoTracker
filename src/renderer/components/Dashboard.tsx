@@ -79,13 +79,13 @@ export default function Dashboard({
                 onChange={(e) => setSpeed(parseFloat(e.target.value))}
                 className="p-1 pr-6 text-xs border border-black/10 rounded-lg font-bold focus:ring-1 focus:ring-primary bg-white cursor-pointer"
               >
-                <option value="1.0">1.0 x</option>
+                <option value="1">1.0 x</option>
                 <option value="1.25">1.25 x</option>
                 <option value="1.5">1.5 x</option>
                 <option value="1.75">1.75 x</option>
-                <option value="2.0">2.0 x</option>
+                <option value="2">2.0 x</option>
                 <option value="2.5">2.5 x</option>
-                <option value="3.0">3.0 x</option>
+                <option value="3">3.0 x</option>
               </select>
             </div>
           </>
