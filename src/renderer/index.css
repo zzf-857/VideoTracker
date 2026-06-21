@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+@theme {
+  --color-primary: #0071E3;
+  --color-on-primary: #FFFFFF;
+  --color-background: #F5F5F7;
+  --color-surface: #FFFFFF;
+  --color-on-surface: #1D1D1F;
+  --color-on-surface-variant: #86868B;
+  --color-outline: #D2D2D7;
+  --color-secondary: #6E6E73;
+  --color-tertiary: #515154;
+}
+
 @layer utilities {
   .glass-panel {
     background: rgba(255, 255, 255, 0.7);

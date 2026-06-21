@@ -37,8 +37,9 @@ function startStreamServer() {
         return;
       }
 
-      // 解码绝对路径
-      const decodedPath = Buffer.from(filePathQuery, 'base64').toString('utf-8');
+      // 解码绝对路径 (并容错处理被 URL 转换器把 '+' 解析为空格的情况)
+      const cleanBase64 = filePathQuery.replace(/ /g, '+');
+      const decodedPath = Buffer.from(cleanBase64, 'base64').toString('utf-8');
       
       if (!fs.existsSync(decodedPath)) {
         res.writeHead(404);
@@ -264,7 +265,7 @@ app.whenReady().then(() => {
   ipcMain.handle('stream:getUrl', (_event, absolutePath: string) => {
     // 对路径进行 base64 编码，防止中文或特殊字符在 URL 传参时解析出错
     const base64Path = Buffer.from(absolutePath).toString('base64');
-    return `http://127.0.0.1:${streamPort}/video?path=${base64Path}`;
+    return `http://127.0.0.1:${streamPort}/video?path=${encodeURIComponent(base64Path)}`;
   });
 
   createWindow();
