@@ -9,7 +9,8 @@
     "build": "npm run build:main && npm run build:renderer",
     "dev:main": "esbuild src/main/index.ts src/main/preload.ts --bundle --platform=node --external:electron --outdir=dist-electron --watch",
     "dev:renderer": "vite",
-    "dev": "concurrently -k -r -n \"main,renderer,app\" -c \"magenta,cyan,blue\" \"npm run dev:main\" \"npm run dev:renderer\" \"electron .\""
+    "dev": "concurrently -k -r -n \"main,renderer,app\" -c \"magenta,cyan,blue\" \"npm run dev:main\" \"npm run dev:renderer\" \"electron .\"",
+    "package": "npm run build && electron-builder --win"
   },
   "keywords": [],
   "author": "",
@@ -36,5 +37,40 @@
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.16"
+  },
+  "build": {
+    "appId": "com.videotracker.app",
+    "productName": "VideoTracker",
+    "directories": {
+      "output": "dist-package"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VideoTracker"
+    }
   }
 }
