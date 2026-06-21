@@ -301,7 +301,17 @@ export default function App() {
       // 检查是否有上一次播放的视频且尚未执行过自动恢复
       if (!hasAutoRestored.current && data.lastPlayedVideo && data.sources.length > 0) {
         const lastVid = data.lastPlayedVideo;
-        const matchingSource = data.sources.find(s => s.id === lastVid.sourceId);
+        let matchingSource = data.sources.find(s => s.id === lastVid.sourceId);
+        
+        // 健壮防错：如果匹配的 sourceId 不匹配视频文件的绝对路径（比如之前的 Bug 导致写错了关联 ID）
+        // 则采用本地路径前缀匹配规则自动纠正为正确的媒体源
+        if (!matchingSource || (matchingSource.type === 'local' && !lastVid.path.startsWith(matchingSource.path))) {
+          const pathMatched = data.sources.find(s => s.type === 'local' && lastVid.path.startsWith(s.path));
+          if (pathMatched) {
+            matchingSource = pathMatched;
+          }
+        }
+
         if (matchingSource) {
           hasAutoRestored.current = true;
           setCurrentSource(matchingSource);
@@ -330,7 +340,7 @@ export default function App() {
         setCurrentSource(null);
       }
     });
-  }, [refreshSignal]);
+  }, [refreshSignal, currentSource]);
 
   // 加载当前源下的首层文件树
   useEffect(() => {
