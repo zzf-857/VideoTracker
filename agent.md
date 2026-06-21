@@ -4,6 +4,10 @@
 
 ## 提交历史日志 (Git Commit Logs)
 
+*   **fix: 关闭主窗口 webSecurity 解决第三方网盘 WebDAV 连接时的 CORS 跨域限制** (b661d23)
+    *   **时间**: 2026-06-21
+    *   **描述**: 在 Electron 主窗口创建配置中增加 `webSecurity: false`，解除 Chromium 对本地资源向第三方 WebDAV 网盘（如 123云盘等）发送自定义请求（如 PROPFIND）的 CORS 跨域网络策略拦截。
+
 *   **feat: 支持 WebDAV/Alist 文件夹浏览器、添加源内嵌选择及流媒体代理转发** (9676d1e)
     *   **时间**: 2026-06-21
     *   **描述**: 1. 在 SourceManager 添加源弹窗内嵌入文件夹浏览器，支持测试连接成功后自动展开、面包屑路径导航和文件夹懒加载列表；2. 在 Electron 主进程本地流媒体服务器中新增 WebDAV 请求代理，完美规避 Chromium 对嵌入式凭证的访问拦截，并透传 Range 请求支持快进快退；3. 适配侧边栏和 App 播放控制及后台时长扫描，将 WebDAV 视频源全部通过代理流播放。
