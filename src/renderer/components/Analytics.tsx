@@ -282,19 +282,22 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
             {/* 最近 7 天趋势图 */}
             <section className="apple-card p-6 rounded-2xl bg-white/80 border border-black/5 shadow-sm transition-shadow hover:shadow-md">
               <h3 className="font-bold text-sm text-on-surface mb-6">最近 7 天学习趋势 ({getUnitLabel()})</h3>
-              <div className="h-44 flex items-end justify-between gap-3 px-1">
+              <div className="h-40 flex items-end justify-between gap-3 px-1">
                 {weeklyDuration.map((duration, idx) => {
                   const heightPercent = Math.max(10, Math.round((duration / maxWeeklySecs) * 100));
                   const isToday = idx === 6;
                   return (
                     <div key={idx} className="flex flex-col items-center gap-2 flex-1">
-                      <div 
-                        style={{ height: `${heightPercent}%` }}
-                        className={`w-full rounded-md transition-all duration-500 hover:opacity-85 ${
-                          isToday ? 'bg-primary shadow-sm shadow-primary/20' : 'bg-primary/20'
-                        }`}
-                        title={`学习 ${formatValue(duration)} ${getUnitLabel()}`}
-                      />
+                      {/* 固定高度的容器，让百分比高度生效，并用 justify-end 让柱子从底部向上长 */}
+                      <div className="h-28 w-full flex flex-col justify-end">
+                        <div 
+                          style={{ height: `${heightPercent}%` }}
+                          className={`w-full rounded-md transition-all duration-500 hover:opacity-85 ${
+                            isToday ? 'bg-primary shadow-sm shadow-primary/20' : 'bg-primary/20'
+                          }`}
+                          title={`学习 ${formatValue(duration)} ${getUnitLabel()}`}
+                        />
+                      </div>
                       <span className={`text-[10px] font-semibold ${isToday ? 'text-primary font-bold' : 'text-on-surface-variant'}`}>
                         {weeklyDays[idx]}
                       </span>
@@ -304,8 +307,8 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
               </div>
             </section>
 
-            {/* 数据概览卡片 */}
-            <section className="apple-card p-6 rounded-2xl bg-[#1D1D1F] text-white relative overflow-hidden group border border-black/5 shadow-sm">
+            {/* 数据概览卡片 - 移除 apple-card 防止背景颜色被 rgba(255,255,255,0.8) 覆盖 */}
+            <section className="p-6 rounded-2xl bg-[#1D1D1F] text-white relative overflow-hidden group border border-black/5 shadow-sm shadow-black/10">
               <div className="relative z-10">
                 <span className="text-white/60 font-bold text-[9px] uppercase tracking-wider">总览看板</span>
                 <h4 className="text-xl font-headline font-extrabold text-white mt-2">专注达成</h4>
