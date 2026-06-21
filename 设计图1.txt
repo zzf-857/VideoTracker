@@ -1,0 +1,1439 @@
+<!-- 主工作台 (极简版) - VideoTracker -->
+<!DOCTYPE html><html class="light" lang="zh-CN" style="width: 1280px; height: 1024px; overflow: hidden; position: relative;"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>VideoTracker | 主工作台</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        body {
+            background-color: #F5F5F7; /* Apple-style light gray background */
+            color: #1D1D1F;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.04);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.02);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+
+        .contribution-cell {
+            aspect-ratio: 1/1;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .video-gradient-overlay {
+            background: linear-gradient(0deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 40%);
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0px); }
+        }
+        .floating-card {
+            animation: float 6s ease-in-out infinite;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "primary": "#0071E3", /* Apple Blue */
+                "on-primary": "#FFFFFF",
+                "background": "#F5F5F7",
+                "surface": "#FFFFFF",
+                "on-surface": "#1D1D1F",
+                "on-surface-variant": "#86868B",
+                "outline": "#D2D2D7",
+                "secondary": "#6E6E73",
+                "tertiary": "#515154"
+            },
+            "fontFamily": {
+                "headline-md": ["Outfit", "-apple-system"],
+                "display-lg": ["Outfit", "-apple-system"],
+                "label-sm": ["Inter", "-apple-system"],
+                "title-lg": ["Outfit", "-apple-system"],
+                "body-md": ["Inter", "-apple-system"],
+                "body-lg": ["Inter", "-apple-system"]
+            },
+            "fontSize": {
+                "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                "label-sm": ["12px", {"lineHeight": "1.2", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                "title-lg": ["20px", {"lineHeight": "1.5", "fontWeight": "500"}],
+                "body-md": ["14px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                "body-lg": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+</head>
+<body class="h-screen w-full flex overflow-hidden">
+<!-- Side Navigation Bar -->
+<aside class="fixed left-0 top-0 h-full flex flex-col bg-white/80 backdrop-blur-xl border-r border-black/5 w-64 z-50">
+<div class="p-6 flex flex-col h-full">
+<div class="mb-10">
+<span class="font-headline-md text-headline-md font-bold text-on-surface">VideoTracker</span>
+<p class="text-on-surface-variant font-body-md opacity-70">高级学习中心</p>
+</div>
+<nav class="flex-1 space-y-1">
+<div class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-primary font-semibold bg-primary/10 cursor-pointer transition-all">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="font-body-md">学习仪表盘</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-black/[0.03] cursor-pointer transition-all duration-300">
+<span class="material-symbols-outlined text-[20px]">folder</span>
+<span class="font-body-md">课程目录</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-black/[0.03] cursor-pointer transition-all duration-300">
+<span class="material-symbols-outlined text-[20px]">cloud</span>
+<span class="font-body-md">云端库</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-black/[0.03] cursor-pointer transition-all duration-300">
+<span class="material-symbols-outlined text-[20px]">analytics</span>
+<span class="font-body-md">学习进度</span>
+</div>
+<div class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-black/[0.03] cursor-pointer transition-all duration-300">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="font-body-md">设置</span>
+</div>
+</nav>
+<button class="mt-auto w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 active:scale-[0.98] transition-all shadow-sm">
+            开始学习
+        </button>
+</div>
+</aside>
+<!-- Main Workspace Container -->
+<main class="ml-64 flex-1 flex flex-col relative">
+<!-- Top App Bar -->
+
+<!-- Content Area -->
+<div class="flex-1 p-10 grid grid-cols-12 gap-8 relative z-10 overflow-hidden">
+<!-- Left: Folder Tree -->
+<section class="col-span-3 glass-panel rounded-2xl flex flex-col overflow-hidden">
+<div class="p-4 border-b border-black/5 flex items-center justify-between">
+<span class="font-title-lg text-title-lg text-on-surface">资源目录</span>
+<span class="material-symbols-outlined text-on-surface-variant text-sm">filter_list</span>
+</div>
+<div class="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-2">
+<!-- Folder Item -->
+<div class="group">
+<div class="flex items-center gap-2 py-1.5 cursor-pointer text-on-surface hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm">expand_more</span>
+<span class="material-symbols-outlined text-on-surface-variant">folder_open</span>
+<span class="text-body-md font-medium">深入浅出人工智能</span>
+</div>
+<div class="ml-6 space-y-1 mt-1 border-l border-black/5 pl-4">
+<div class="flex items-center gap-2 py-1.5 cursor-pointer text-primary bg-primary/5 rounded-md px-2">
+<span class="material-symbols-outlined text-xs">play_circle</span>
+<span class="text-body-md font-semibold">01. 机器学习导论</span>
+<span class="material-symbols-outlined text-xs ml-auto">cloud</span>
+</div>
+<div class="flex items-center gap-2 py-1.5 cursor-pointer text-on-surface-variant hover:text-on-surface transition-colors px-2">
+<span class="material-symbols-outlined text-xs">play_circle</span>
+<span class="text-body-md">02. 神经网络基础理论</span>
+<span class="material-symbols-outlined text-xs ml-auto opacity-40">cloud</span>
+</div>
+<div class="flex items-center gap-2 py-1.5 cursor-pointer text-on-surface-variant hover:text-on-surface transition-colors px-2">
+<span class="material-symbols-outlined text-xs">description</span>
+<span class="text-body-md">学习大纲与参考书目</span>
+<span class="material-symbols-outlined text-xs ml-auto opacity-40">attachment</span>
+</div>
+</div>
+</div>
+<!-- Folder Item 2 -->
+<div class="group">
+<div class="flex items-center gap-2 py-1.5 cursor-pointer text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+<span class="material-symbols-outlined">folder</span>
+<span class="text-body-md">计算机视觉实战</span>
+</div>
+</div>
+<!-- Folder Item 3 -->
+<div class="group">
+<div class="flex items-center gap-2 py-1.5 cursor-pointer text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+<span class="material-symbols-outlined">folder</span>
+<span class="text-body-md">本地存档项目</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Center: Video Player -->
+<section class="col-span-6 flex flex-col gap-6">
+<div class="flex-1 glass-panel rounded-2xl overflow-hidden relative group bg-black/5">
+<!-- Video Placeholder -->
+<div class="absolute inset-0 bg-[#000] flex items-center justify-center">
+<div class="w-full h-full opacity-90 grayscale-[0.2]" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDtJPsiVosnuRlkme6b-_daKAaAmbV0z-j9CbP2v66vSt3FMJ3RETLmfcSPDKbTbLec2UKjFrS_gDP-LI_Uwcsatr4vECmNQRTmmhZGO3kGTy8KSLs8r3R7dsLHaKlVFd34gtrQRfkO30NIsLl9vkxgIjW7QSuDafJYnWhc3Z1-xsulH7OeHYE2QdOuhEz3exFx7oRStHLVxLxwHvxPjBnc_hbFY8_B9hhODl80r5LTaMTBGpfKUoQtWBvTfLDHPncw5M5QpYONoOg'); background-size: cover; background-position: center;"></div>
+<div class="absolute inset-0 video-gradient-overlay"></div>
+</div>
+<!-- Center Play Button -->
+<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+<div class="w-16 h-16 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center border border-black/5 cursor-pointer hover:scale-105 transition-transform shadow-lg">
+<span class="material-symbols-outlined text-on-surface text-4xl" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<!-- Video Controls -->
+<div class="absolute bottom-4 left-4 right-4 h-12 glass-panel rounded-xl flex items-center px-4 gap-4 bg-white/60">
+<span class="material-symbols-outlined text-on-surface cursor-pointer">pause</span>
+<div class="flex-1 h-1 bg-black/10 rounded-full relative overflow-hidden">
+<div class="absolute inset-y-0 left-0 bg-primary w-2/3"></div>
+</div>
+<span class="text-label-sm font-label-sm text-on-surface opacity-70">14:20 / 22:45</span>
+<span class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-sm">settings</span>
+<span class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-sm">fullscreen</span>
+</div>
+</div>
+<!-- Floating Card Bottom -->
+<div class="h-20 glass-panel rounded-2xl flex items-center justify-between px-8 border-l-4 border-primary floating-card bg-white/80">
+<div class="flex items-center gap-10">
+<div class="flex flex-col">
+<span class="text-[11px] uppercase tracking-wider text-on-surface-variant font-bold">总时长</span>
+<span class="font-headline-md text-headline-md text-on-surface">24h</span>
+</div>
+<div class="h-8 w-px bg-black/5"></div>
+<div class="flex flex-col">
+<span class="text-[11px] uppercase tracking-wider text-on-surface-variant font-bold">完成预估</span>
+<span class="font-headline-md text-headline-md text-on-surface">16 天</span>
+</div>
+</div>
+<div class="flex flex-col items-end min-w-[200px]">
+<span class="text-[11px] uppercase tracking-wider text-on-surface-variant font-bold">当前进度</span>
+<div class="flex items-center gap-4 w-full justify-end">
+<div class="w-32 h-1.5 bg-black/5 rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[65%]"></div>
+</div>
+<span class="text-body-md font-bold text-on-surface">65%</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Right: Contribution & Journal -->
+<section class="col-span-3 flex flex-col gap-6">
+<!-- Mini Contribution Calendar -->
+<div class="glass-panel rounded-2xl p-4">
+<div class="flex items-center justify-between mb-4">
+<span class="text-title-lg font-title-lg text-on-surface text-sm">活跃热力图</span>
+<span class="text-[10px] font-bold text-primary">连续学习 12 天</span>
+</div>
+<div class="grid grid-cols-7 gap-1">
+<!-- Heatmap mock -->
+<script>
+                        const levels = [
+                            'bg-black/[0.03]', 
+                            'bg-primary/20', 
+                            'bg-primary/40', 
+                            'bg-primary/70', 
+                            'bg-primary'
+                        ];
+                        for(let i=0; i<35; i++) {
+                            const level = Math.floor(Math.random() * levels.length);
+                            document.write(`<div class="contribution-cell ${levels[level]}"></div>`);
+                        }
+                    </script><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-black/[0.03]"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/40"></div><div class="contribution-cell bg-primary/20"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary"></div><div class="contribution-cell bg-primary/70"></div><div class="contribution-cell bg-primary"></div>
+</div>
+<div class="mt-4 flex justify-between items-center text-[10px] text-on-surface-variant font-medium uppercase tracking-tight">
+<span class="">少</span>
+<div class="flex gap-1">
+<div class="w-2 h-2 bg-black/[0.03] rounded-[1px]"></div>
+<div class="w-2 h-2 bg-primary/20 rounded-[1px]"></div>
+<div class="w-2 h-2 bg-primary/40 rounded-[1px]"></div>
+<div class="w-2 h-2 bg-primary/70 rounded-[1px]"></div>
+<div class="w-2 h-2 bg-primary rounded-[1px]"></div>
+</div>
+<span class="">多</span>
+</div>
+</div>
+<!-- Journal -->
+<div class="flex-1 glass-panel rounded-2xl flex flex-col overflow-hidden">
+<div class="p-4 border-b border-black/5 flex items-center justify-between bg-black/[0.02]">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface text-sm">edit_note</span>
+<span class="font-title-lg text-title-lg text-on-surface text-sm">Markdown 学习笔记</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-sm cursor-pointer hover:text-on-surface">save</span>
+</div>
+<div class="flex-1 p-4 flex flex-col gap-4 overflow-hidden">
+<textarea class="flex-1 bg-transparent border-none focus:ring-0 text-body-md text-on-surface placeholder:text-on-surface-variant/40 resize-none custom-scrollbar" placeholder="# 输入您的学习感悟..."></textarea>
+<div class="flex items-center gap-3 pt-3 border-t border-black/5">
+<span class="material-symbols-outlined text-xs text-on-surface-variant cursor-pointer hover:text-on-surface">format_bold</span>
+<span class="material-symbols-outlined text-xs text-on-surface-variant cursor-pointer hover:text-on-surface">format_italic</span>
+<span class="material-symbols-outlined text-xs text-on-surface-variant cursor-pointer hover:text-on-surface">code</span>
+<span class="material-symbols-outlined text-xs text-on-surface-variant cursor-pointer hover:text-on-surface">link</span>
+<div class="ml-auto flex items-center gap-2">
+<span class="text-[10px] text-on-surface-variant font-medium">256 字</span>
+<div class="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Micro-interaction overlay element -->
+<div class="pointer-events-none fixed top-0 left-0 w-32 h-32 bg-primary/5 blur-[60px] rounded-full z-0 transform -translate-x-1/2 -translate-y-1/2" id="glow-cursor" style="left: 1257px; top: 917px;"></div>
+</main>
+<script>
+    // Subtle interaction
+    const cursor = document.getElementById('glow-cursor');
+    document.addEventListener('mousemove', (e) => {
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+    });
+
+    document.querySelectorAll('.contribution-cell').forEach(cell => {
+        cell.addEventListener('mouseenter', () => {
+            cell.classList.add('scale-110', 'z-10', 'shadow-sm');
+        });
+        cell.addEventListener('mouseleave', () => {
+            cell.classList.remove('scale-110', 'z-10', 'shadow-sm');
+        });
+    });
+
+    const textarea = document.querySelector('textarea');
+    const saveIndicator = document.querySelector('.animate-pulse');
+    let saveTimeout;
+    textarea.addEventListener('input', () => {
+        saveIndicator.style.opacity = '0.5';
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            saveIndicator.style.opacity = '1';
+        }, 1000);
+    });
+</script>
+
+
+<div id="snapdom-sandbox" data-snapdom-sandbox="true" aria-hidden="true" style="position: absolute; left: -9999px; top: -9999px; width: 0px; height: 0px; overflow: hidden;"></div>
+
+
+
+</body></html>
+
+<!-- 应用设置 (极简版) - VideoTracker -->
+<!DOCTYPE html><html class="light" lang="zh-CN" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>VideoTracker | 设置与同步</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "primary": "#007AFF",
+                "on-primary": "#FFFFFF",
+                "surface": "#F5F5F7",
+                "on-surface": "#1D1D1F",
+                "surface-variant": "#FFFFFF",
+                "on-surface-variant": "#86868B",
+                "outline": "#D2D2D7",
+                "error": "#FF3B30",
+                "background": "#F5F5F7"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.5rem",
+                "lg": "0.75rem",
+                "xl": "1rem",
+                "2xl": "1.25rem",
+                "3xl": "1.5rem",
+                "full": "9999px"
+            },
+            "spacing": {
+                "margin-mobile": "20px",
+                "base-unit": "4px",
+                "margin-desktop": "40px",
+                "gutter": "24px",
+                "container-max": "1440px"
+            },
+            "fontFamily": {
+                "headline-md": ["Outfit"],
+                "display-lg": ["Outfit"],
+                "label-sm": ["Inter"],
+                "title-lg": ["Outfit"],
+                "body-md": ["Inter"],
+                "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                "label-sm": ["12px", {"lineHeight": "1.2", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                "title-lg": ["19px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                "body-md": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                "body-lg": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+      body {
+        background-color: #F5F5F7;
+        color: #1D1D1F;
+        -webkit-font-smoothing: antialiased;
+      }
+      .apple-card {
+        background: #FFFFFF;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+      }
+      .keycap {
+        background: linear-gradient(180deg, #FFFFFF 0%, #F5F5F7 100%);
+        border: 1px solid #D2D2D7;
+        box-shadow: 0 2px 0 #D2D2D7, 0 4px 6px rgba(0,0,0,0.05);
+        color: #1D1D1F;
+      }
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #D2D2D7;
+        border-radius: 10px;
+      }
+      .active-sidebar-item {
+        background-color: #007AFF;
+        color: #FFFFFF;
+      }
+      .toggle-switch:checked + .toggle-bg {
+        background-color: #34C759;
+      }
+      .toggle-switch:checked + .toggle-bg::after {
+        transform: translateX(1.25rem);
+      }
+      input[type="range"] {
+        -webkit-appearance: none;
+        height: 4px;
+        background: #D2D2D7;
+        border-radius: 2px;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 20px;
+        height: 20px;
+        background: #FFFFFF;
+        border: 0.5px solid rgba(0,0,0,0.1);
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        cursor: pointer;
+      }
+    </style>
+</head>
+<body class="font-body-md text-body-md selection:bg-primary/20 selection:text-on-surface">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-64 flex flex-col bg-white border-r border-black/5 z-50">
+<div class="p-8">
+<h1 class="font-headline-md text-headline-md font-bold text-on-surface tracking-tight">VideoTracker</h1>
+<p class="font-body-md text-on-surface-variant text-xs mt-1">高级学习中心</p>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-on-surface hover:bg-black/5 transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="font-body-md font-medium">学习仪表盘</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-on-surface hover:bg-black/5 transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">folder</span>
+<span class="font-body-md font-medium">课程目录</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-on-surface hover:bg-black/5 transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">cloud</span>
+<span class="font-body-md font-medium">云端库</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-on-surface hover:bg-black/5 transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">analytics</span>
+<span class="font-body-md font-medium">学习进度</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-primary/20 text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="font-body-md font-medium">设置</span>
+</a>
+</nav>
+<div class="p-6">
+<button class="w-full py-2.5 bg-primary text-white rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all shadow-sm">
+
+            开始学习
+        </button>
+</div>
+</aside>
+<!-- TopAppBar -->
+
+<!-- Main Content Canvas -->
+<main class="ml-64 mt-16 p-10 min-h-[calc(100vh-16px)]">
+<div class="max-w-[1100px] mx-auto">
+<header class="mb-10">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-1">系统设置</h2>
+<p class="font-body-md text-on-surface-variant">个性化您的 VideoTracker 学习体验与云端同步偏好</p>
+</header>
+<div class="flex gap-10 items-start">
+<!-- Left: Menu Categories -->
+<nav class="w-1/4 flex flex-col gap-1">
+<button class="flex items-center gap-4 px-4 py-3 rounded-xl text-on-surface-variant hover:bg-black/5 transition-all group">
+<span class="material-symbols-outlined text-[20px]">settings_applications</span>
+<span class="font-title-lg text-body-lg font-medium">通用设置</span>
+</button>
+<button class="flex items-center gap-4 px-4 py-3 rounded-xl bg-white shadow-sm border border-black/5 text-on-surface transition-all">
+<span class="material-symbols-outlined text-[20px] text-primary">sync</span>
+<span class="font-title-lg text-body-lg font-semibold">云端同步</span>
+</button>
+<button class="flex items-center gap-4 px-4 py-3 rounded-xl text-on-surface-variant hover:bg-black/5 transition-all group">
+<span class="material-symbols-outlined text-[20px]">keyboard</span>
+<span class="font-title-lg text-body-lg font-medium">快捷键</span>
+</button>
+<button class="flex items-center gap-4 px-4 py-3 rounded-xl text-on-surface-variant hover:bg-black/5 transition-all group">
+<span class="material-symbols-outlined text-[20px]">palette</span>
+<span class="font-title-lg text-body-lg font-medium">外观</span>
+</button>
+<div class="mt-8 pt-6 border-t border-black/5">
+<button class="flex items-center gap-4 px-4 py-3 rounded-xl text-error hover:bg-error/5 transition-all w-full">
+<span class="material-symbols-outlined text-[20px]">logout</span>
+<span class="font-title-lg text-body-lg font-medium">退出登录</span>
+</button>
+</div>
+</nav>
+<!-- Right: Settings Details -->
+<section class="flex-1 space-y-6">
+<!-- Cloud Sync Card -->
+<div class="apple-card rounded-2xl p-8">
+<div class="flex justify-between items-start mb-8">
+<div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-1">云端同步状态</h3>
+<p class="text-xs text-on-surface-variant">上次同步：2分钟前</p>
+</div>
+<span class="px-2.5 py-1 bg-green-50 text-green-600 font-label-sm text-[10px] rounded-full border border-green-100 flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                            已连接
+                        </span>
+</div>
+<div class="space-y-6">
+<div class="flex items-center justify-between">
+<div>
+<p class="font-body-lg text-body-lg font-medium text-on-surface">自动同步学习进度</p>
+<p class="text-xs text-on-surface-variant">在所有设备间保持实时同步</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only toggle-switch peer" type="checkbox">
+<div class="w-11 h-6 bg-[#E9E9EA] rounded-full toggle-bg after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-sm"></div>
+</label>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-black/5">
+<div>
+<p class="font-body-lg text-body-lg font-medium text-on-surface">笔记自动备份</p>
+<p class="text-xs text-on-surface-variant">将本地导出的笔记同步至云端</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only toggle-switch peer" type="checkbox">
+<div class="w-11 h-6 bg-[#E9E9EA] rounded-full toggle-bg after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-sm"></div>
+</label>
+</div>
+</div>
+</div>
+<!-- General Settings Details -->
+<div class="grid grid-cols-2 gap-6">
+<div class="apple-card rounded-2xl p-6">
+<h3 class="font-body-lg text-body-lg font-medium text-on-surface mb-4">闲置超时 (分钟)</h3>
+<div class="flex items-center gap-4">
+<input class="w-full cursor-pointer accent-primary" max="60" min="1" type="range" value="15">
+<span class="font-title-lg text-primary text-sm font-bold min-w-[3ch]">15</span>
+</div>
+<p class="text-xs text-on-surface-variant mt-4">系统将在无操作后自动进入深层对焦模式。</p>
+</div>
+<div class="apple-card rounded-2xl p-6">
+<h3 class="font-body-lg text-body-lg font-medium text-on-surface mb-4">存储位置</h3>
+<div class="flex items-center justify-between bg-black/5 p-3 rounded-lg">
+<span class="text-xs font-mono text-on-surface-variant truncate mr-2">/Users/admin/VideoTracker/Data</span>
+<button class="text-primary hover:underline text-xs font-semibold flex-shrink-0">更改</button>
+</div>
+</div>
+</div>
+<!-- Keyboard Shortcuts Visualization -->
+<div class="apple-card rounded-2xl p-8">
+<div class="flex items-center justify-between mb-8">
+<h3 class="font-title-lg text-title-lg text-on-surface">核心快捷键</h3>
+<button class="text-primary text-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">edit</span>
+                            自定义
+                        </button>
+</div>
+<div class="grid grid-cols-2 gap-x-12 gap-y-8">
+<!-- Play/Pause -->
+<div class="flex items-center gap-6">
+<div class="keycap w-20 h-10 rounded-lg flex items-center justify-center font-semibold text-xs tracking-wide">
+                                Space
+                            </div>
+<div>
+<p class="font-body-md font-medium text-on-surface">播放 / 暂停</p>
+<p class="text-xs text-on-surface-variant">快速切换视频状态</p>
+</div>
+</div>
+<!-- Skip -->
+<div class="flex items-center gap-6">
+<div class="flex gap-2">
+<div class="keycap w-10 h-10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+</div>
+<div class="keycap w-10 h-10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</div>
+</div>
+<div>
+<p class="font-body-md font-medium text-on-surface">快进 / 快退</p>
+<p class="text-xs text-on-surface-variant">默认步长：5秒</p>
+</div>
+</div>
+<!-- Add Note -->
+<div class="flex items-center gap-6">
+<div class="flex gap-2">
+<div class="keycap w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xs">⌘</div>
+<div class="keycap w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xs">N</div>
+</div>
+<div>
+<p class="font-body-md font-medium text-on-surface">新建对焦笔记</p>
+<p class="text-xs text-on-surface-variant">实时打标并开始录入</p>
+</div>
+</div>
+<!-- Screen Capture -->
+<div class="flex items-center gap-6">
+<div class="flex gap-2">
+<div class="keycap w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xs">⇧</div>
+<div class="keycap w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xs">S</div>
+</div>
+<div>
+<p class="font-body-md font-medium text-on-surface">关键帧截图</p>
+<p class="text-xs text-on-surface-variant">保存至当前视频图库</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Appearance / Theme Selection -->
+<div class="apple-card rounded-2xl p-8">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-6">界面主题</h3>
+<div class="grid grid-cols-3 gap-6">
+<button class="group">
+<div class="h-28 w-full bg-white border-2 border-primary rounded-xl mb-3 flex flex-col gap-2 p-3 overflow-hidden shadow-sm">
+<div class="h-2 w-1/2 bg-primary/20 rounded"></div>
+<div class="h-2 w-3/4 bg-black/5 rounded"></div>
+<div class="h-2 w-2/3 bg-black/5 rounded"></div>
+</div>
+<span class="font-label-sm text-on-surface font-semibold">明亮模式 (默认)</span>
+</button>
+<button class="group">
+<div class="h-28 w-full bg-slate-900 border border-black/5 rounded-xl mb-3 flex flex-col gap-2 p-3 overflow-hidden group-hover:border-black/20 transition-all">
+<div class="h-2 w-1/2 bg-white/20 rounded"></div>
+<div class="h-2 w-3/4 bg-white/5 rounded"></div>
+<div class="h-2 w-2/3 bg-white/5 rounded"></div>
+</div>
+<span class="font-label-sm text-on-surface-variant">深邃黑</span>
+</button>
+<button class="group">
+<div class="h-28 w-full bg-slate-800 border border-black/5 rounded-xl mb-3 flex flex-col gap-2 p-3 overflow-hidden group-hover:border-black/20 transition-all">
+<div class="h-2 w-1/2 bg-blue-400/20 rounded"></div>
+<div class="h-2 w-3/4 bg-white/5 rounded"></div>
+<div class="h-2 w-2/3 bg-white/5 rounded"></div>
+</div>
+<span class="font-label-sm text-on-surface-variant">午夜蓝</span>
+</button>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Success Feedback Overlay -->
+<div class="fixed bottom-10 right-10 flex items-center gap-4 bg-white/90 backdrop-blur-xl border border-black/5 px-6 py-3.5 rounded-2xl shadow-xl translate-y-32 opacity-0 transition-all duration-500 z-[100]" id="save-toast">
+<div class="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-[14px] font-bold">check</span>
+</div>
+<p class="font-body-md font-medium text-on-surface">设置已自动保存并同步至云端</p>
+</div>
+<script>
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+    const toast = document.getElementById('save-toast');
+
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', () => {
+            showToast();
+        });
+    });
+
+    const sliders = document.querySelectorAll('input[type="range"]');
+    sliders.forEach(slider => {
+        slider.addEventListener('change', () => {
+            showToast();
+        });
+    });
+
+    function showToast() {
+        toast.classList.remove('translate-y-32', 'opacity-0');
+        setTimeout(() => {
+            toast.classList.add('translate-y-32', 'opacity-0');
+        }, 3000);
+    }
+
+    // Keycap interaction
+    document.addEventListener('keydown', (e) => {
+        const caps = document.querySelectorAll('.keycap');
+        caps.forEach(c => {
+            if(c.textContent.trim().toLowerCase() === e.key.toLowerCase() || 
+               (e.code === 'Space' && c.textContent.trim() === 'Space')) {
+                c.classList.add('scale-95', 'bg-[#F0F0F0]');
+                setTimeout(() => c.classList.remove('scale-95', 'bg-[#F0F0F0]'), 100);
+            }
+        });
+    });
+</script>
+
+
+
+
+
+
+
+
+</body></html>
+
+<!-- 全量数据统计 (极简版) - VideoTracker -->
+<!DOCTYPE html><html class="light" lang="zh-CN" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>VideoTracker | 全量数据统计</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary": "#007AFF",
+                    "secondary": "#8E8E93",
+                    "tertiary": "#5AC8FA",
+                    "background": "#F5F5F7",
+                    "surface": "#FFFFFF",
+                    "on-surface": "#1D1D1F",
+                    "on-surface-variant": "#86868B",
+                    "outline": "#D2D2D7",
+                    "surface-container": "#FBFBFD",
+                    "surface-container-high": "#F2F2F7"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.5rem",
+                    "lg": "0.75rem",
+                    "xl": "1rem",
+                    "2xl": "1.5rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "20px",
+                    "base-unit": "4px",
+                    "margin-desktop": "40px",
+                    "gutter": "24px",
+                    "container-max": "1440px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Outfit", "Inter", "sans-serif"],
+                    "display-lg": ["Outfit", "Inter", "sans-serif"],
+                    "label-sm": ["Inter", "sans-serif"],
+                    "title-lg": ["Outfit", "Inter", "sans-serif"],
+                    "body-md": ["Inter", "sans-serif"],
+                    "body-lg": ["Inter", "sans-serif"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "display-lg": ["40px", {"lineHeight": "1.1", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "1.2", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "title-lg": ["20px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #F5F5F7;
+            color: #1D1D1F;
+            -webkit-font-smoothing: antialiased;
+        }
+        .apple-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.04);
+            border-radius: 1.25rem;
+        }
+        .heatmap-cell {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            transition: opacity 0.2s ease;
+        }
+        .heatmap-cell:hover {
+            opacity: 0.7;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #D2D2D7;
+            border-radius: 10px;
+        }
+        .progress-ring-apple {
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md selection:bg-primary/20">
+<!-- Side Navigation -->
+<aside class="fixed left-0 top-0 h-full flex flex-col bg-white/80 backdrop-blur-xl border-r border-black/5 w-64 z-50">
+<div class="p-10">
+<h1 class="font-headline-md text-headline-md font-bold tracking-tight text-on-surface">VideoTracker</h1>
+<p class="text-on-surface-variant text-[11px] uppercase tracking-wider font-semibold mt-1">Advanced Learning</p>
+</div>
+<nav class="flex-1 px-6 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-black/5 rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[22px]" data-icon="dashboard">dashboard</span>
+<span class="">学习仪表盘</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-black/5 rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[22px]" data-icon="folder">folder</span>
+<span class="">课程目录</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-black/5 rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[22px]" data-icon="cloud">cloud</span>
+<span class="">云端库</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-primary bg-primary/5 rounded-xl font-semibold transition-all" href="#">
+<span class="material-symbols-outlined text-[22px]" data-icon="analytics">analytics</span>
+<span class="">学习进度</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-black/5 rounded-xl transition-all" href="#">
+<span class="material-symbols-outlined text-[22px]" data-icon="settings">settings</span>
+<span class="">设置</span>
+</a>
+</nav>
+<div class="p-8">
+<button class="w-full py-3.5 bg-primary text-white rounded-xl font-bold transition-all hover:opacity-90 active:scale-95 shadow-lg shadow-primary/20">
+            开始学习
+        </button>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 p-12 min-h-screen">
+<!-- Header -->
+<header class="flex justify-between items-end mb-12">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface tracking-tight">全量数据统计</h2>
+<p class="text-on-surface-variant mt-2 text-lg">深度分析您的学习路径与知识增长趋势</p>
+</div>
+<div class="flex items-center gap-4">
+<div class="bg-white rounded-full p-2 flex items-center gap-2 border border-black/5 pr-4 shadow-sm">
+<div class="flex gap-1 px-2">
+<button class="w-8 h-8 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="notifications">notifications</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="help">help</span>
+</button>
+</div>
+<div class="w-9 h-9 rounded-full overflow-hidden ring-1 ring-black/5">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXwnT905doMIQQ_fL1ana3cvN-p4MY--W65ZB_Oa8P8TRFYul2lWzyiOBjS1-9e9kfJLqT9Y4Nn1s8hybjcZmgDvrJiQFfpkmLmpVWKPpy96KGBS_YzAWNuhTexm7Fh3zJyuWUEsbfVNo7aWVIeiDLVO4Otrotf3KecJ3dzNPvC4wz4rfRoU0t_rfEcwNL9pDN78nRwFNvTiCEeebEqim_x9UXGZQajY0BqV9fWT5HqvBfb5OLUUL58YVR0KxtAiHb6M1rMc3pbuM">
+</div>
+</div>
+</div>
+</header>
+<div class="grid grid-cols-12 gap-gutter">
+<!-- Left Column -->
+<div class="col-span-12 lg:col-span-5 space-y-gutter">
+<!-- 7-Day Chart -->
+<section class="apple-card p-8">
+<div class="flex justify-between items-start mb-10">
+<div>
+<h3 class="font-title-lg text-title-lg text-on-surface">7日学习时长</h3>
+<p class="text-label-sm text-on-surface-variant mt-1">单位：小时</p>
+</div>
+<div class="px-3 py-1 bg-green-50 text-green-600 rounded-full text-xs font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="trending_up">trending_up</span>
+                        12%
+                    </div>
+</div>
+<div class="h-44 flex items-end justify-between gap-4 px-2">
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors" style="height: 60%"></div>
+<span class="text-[11px] font-medium text-on-surface-variant">周一</span>
+</div>
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors" style="height: 85%"></div>
+<span class="text-[11px] font-medium text-on-surface-variant">周二</span>
+</div>
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary rounded-lg transition-colors" style="height: 100%"></div>
+<span class="text-[11px] font-bold text-on-surface">周三</span>
+</div>
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors" style="height: 45%"></div>
+<span class="text-[11px] font-medium text-on-surface-variant">周四</span>
+</div>
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors" style="height: 70%"></div>
+<span class="text-[11px] font-medium text-on-surface-variant">周五</span>
+</div>
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors" style="height: 30%"></div>
+<span class="text-[11px] font-medium text-on-surface-variant">周六</span>
+</div>
+<div class="flex flex-col items-center gap-3 flex-1">
+<div class="w-full bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors" style="height: 55%"></div>
+<span class="text-[11px] font-medium text-on-surface-variant">周日</span>
+</div>
+</div>
+</section>
+<div class="grid grid-cols-2 gap-gutter">
+<!-- Donut Chart -->
+<section class="apple-card p-8 flex flex-col items-center">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-8 w-full text-left">学习分类</h3>
+<div class="relative w-36 h-36">
+<svg class="w-full h-full" viewBox="0 0 100 100">
+<circle class="text-black/5 stroke-current" cx="50" cy="50" fill="transparent" r="42" stroke-width="8"></circle>
+<circle class="text-primary stroke-current progress-ring-apple" cx="50" cy="50" fill="transparent" r="42" stroke-linecap="round" stroke-width="8" style="stroke-dasharray: 263.8; stroke-dashoffset: 79;"></circle>
+<circle class="text-tertiary stroke-current progress-ring-apple" cx="50" cy="50" fill="transparent" r="42" stroke-linecap="round" stroke-width="8" style="stroke-dasharray: 263.8; stroke-dashoffset: 210; transform: rotate(45deg); transform-origin: 50% 50%;"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-2xl font-bold tracking-tight">78%</span>
+<span class="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">技术开发</span>
+</div>
+</div>
+<div class="mt-8 space-y-2 w-full text-xs">
+<div class="flex justify-between items-center"><span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-primary"></span> 计算机科学</span> <span class="font-semibold">60%</span></div>
+<div class="flex justify-between items-center"><span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-tertiary"></span> 语言学习</span> <span class="font-semibold">25%</span></div>
+<div class="flex justify-between items-center"><span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-black/10"></span> 其他</span> <span class="font-semibold">15%</span></div>
+</div>
+</section>
+<!-- Badges -->
+<section class="apple-card p-8">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-6">成就勋章</h3>
+<div class="grid grid-cols-2 gap-4">
+<div class="aspect-square bg-blue-50/50 rounded-2xl flex items-center justify-center relative group transition-transform hover:scale-105 border border-blue-100/50">
+<span class="material-symbols-outlined text-3xl text-primary" data-icon="workspace_premium" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+<div class="absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-[10px] flex items-center justify-center rounded-full border-2 border-white font-bold">1</div>
+</div>
+<div class="aspect-square bg-orange-50/50 rounded-2xl flex items-center justify-center relative group transition-transform hover:scale-105 border border-orange-100/50">
+<span class="material-symbols-outlined text-3xl text-orange-500" data-icon="local_fire_department" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+</div>
+<div class="aspect-square bg-black/[0.02] rounded-2xl flex items-center justify-center opacity-40 grayscale">
+<span class="material-symbols-outlined text-3xl text-on-surface-variant" data-icon="lock">lock</span>
+</div>
+<div class="aspect-square bg-black/[0.02] rounded-2xl flex items-center justify-center opacity-40 grayscale">
+<span class="material-symbols-outlined text-3xl text-on-surface-variant" data-icon="lock">lock</span>
+</div>
+</div>
+</section>
+</div>
+<!-- Spotlight Card -->
+<section class="apple-card p-8 bg-on-surface relative overflow-hidden group">
+<div class="relative z-10">
+<span class="text-white/60 font-bold text-[10px] uppercase tracking-[0.2em]">Learning Spotlight</span>
+<h4 class="font-headline-md text-headline-md text-white mt-3">专注力达人</h4>
+<p class="text-white/70 text-sm mt-2 max-w-[80%]">您上周的深度学习时长超过了 95% 的用户。保持这种高效的节奏。</p>
+</div>
+<div class="absolute right-0 bottom-0 p-4 opacity-20 group-hover:opacity-40 transition-opacity">
+<span class="material-symbols-outlined text-[100px] text-white" data-icon="bolt">bolt</span>
+</div>
+</section>
+</div>
+<!-- Right Column -->
+<div class="col-span-12 lg:col-span-7 space-y-gutter">
+<!-- Heatmap -->
+<section class="apple-card p-10">
+<div class="flex justify-between items-center mb-10">
+<h3 class="font-title-lg text-title-lg text-on-surface">年度学习热力图 (2024)</h3>
+<div class="flex items-center gap-3 text-[11px] font-bold text-on-surface-variant">
+<span class="">Less</span>
+<div class="flex gap-1">
+<div class="w-2.5 h-2.5 bg-black/5 rounded-sm"></div>
+<div class="w-2.5 h-2.5 bg-primary/20 rounded-sm"></div>
+<div class="w-2.5 h-2.5 bg-primary/40 rounded-sm"></div>
+<div class="w-2.5 h-2.5 bg-primary/70 rounded-sm"></div>
+<div class="w-2.5 h-2.5 bg-primary rounded-sm"></div>
+</div>
+<span class="">More</span>
+</div>
+</div>
+<div class="flex flex-col gap-1 overflow-x-auto pb-4 custom-scrollbar">
+<div class="flex gap-1" id="heatmap-grid"><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/30"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-black/5"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-black/5"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/30"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/30"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-black/5"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/30"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div></div><div class="flex flex-col gap-1"><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/60"></div><div class="heatmap-cell bg-primary/10"></div><div class="heatmap-cell bg-primary/30"></div><div class="heatmap-cell bg-primary"></div><div class="heatmap-cell bg-black/5"></div><div class="heatmap-cell bg-primary"></div></div></div>
+<div class="flex justify-between mt-6 text-[10px] font-bold text-on-surface-variant px-1 uppercase tracking-tighter">
+<span class="">JAN</span><span class="">FEB</span><span class="">MAR</span><span class="">APR</span><span class="">MAY</span><span class="">JUN</span><span class="">JUL</span><span class="">AUG</span><span class="">SEP</span><span class="">OCT</span><span class="">NOV</span><span class="">DEC</span>
+</div>
+</div>
+<script>
+                    const grid = document.getElementById('heatmap-grid');
+                    for(let i=0; i<53; i++) {
+                        const column = document.createElement('div');
+                        column.className = 'flex flex-col gap-1';
+                        for(let j=0; j<7; j++) {
+                            const cell = document.createElement('div');
+                            const intensity = Math.random();
+                            let bg = 'bg-black/5';
+                            if(intensity > 0.8) bg = 'bg-primary';
+                            else if(intensity > 0.5) bg = 'bg-primary/60';
+                            else if(intensity > 0.3) bg = 'bg-primary/30';
+                            else if(intensity > 0.1) bg = 'bg-primary/10';
+                            cell.className = `heatmap-cell ${bg}`;
+                            column.appendChild(cell);
+                        }
+                        grid.appendChild(column);
+                    }
+                </script>
+</section>
+<!-- Logs Timeline -->
+<section class="apple-card flex flex-col h-[580px]">
+<div class="p-8 border-b border-black/5 flex justify-between items-center">
+<h3 class="font-title-lg text-title-lg text-on-surface">学习日志</h3>
+<div class="flex gap-3">
+<button class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors border border-black/5">
+<span class="material-symbols-outlined text-[18px]" data-icon="search">search</span>
+</button>
+<button class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors border border-black/5">
+<span class="material-symbols-outlined text-[18px]" data-icon="filter_list">filter_list</span>
+</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-10 custom-scrollbar space-y-10">
+<!-- Log 1 -->
+<div class="flex gap-8 relative">
+<div class="flex flex-col items-center">
+<div class="w-12 h-12 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-[24px]" data-icon="play_circle">play_circle</span>
+</div>
+<div class="w-px flex-1 bg-black/5 my-2"></div>
+</div>
+<div class="flex-1 pb-2">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-bold text-on-surface text-base">完成了《高级React模式》第三章</h4>
+<span class="text-xs font-semibold text-on-surface-variant">今天 14:30</span>
+</div>
+<p class="text-body-md text-on-surface-variant leading-relaxed mb-4">深入研究了 Compound Components 和 Render Props 的性能差异。完成了 5 个代码挑战。</p>
+<div class="flex gap-2">
+<span class="px-2.5 py-1 rounded-md bg-black/5 text-[10px] font-bold text-on-surface-variant">REACT</span>
+<span class="px-2.5 py-1 rounded-md bg-black/5 text-[10px] font-bold text-on-surface-variant">前端开发</span>
+</div>
+</div>
+</div>
+<!-- Log 2 -->
+<div class="flex gap-8 relative">
+<div class="flex flex-col items-center">
+<div class="w-12 h-12 rounded-2xl bg-tertiary text-white flex items-center justify-center shadow-lg shadow-tertiary/20">
+<span class="material-symbols-outlined text-[24px]" data-icon="edit_note">edit_note</span>
+</div>
+<div class="w-px flex-1 bg-black/5 my-2"></div>
+</div>
+<div class="flex-1 pb-2">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-bold text-on-surface text-base">撰写了学习笔记：分布式系统一致性</h4>
+<span class="text-xs font-semibold text-on-surface-variant">昨天 21:15</span>
+</div>
+<p class="text-body-md text-on-surface-variant leading-relaxed mb-4">总结了 Paxos 和 Raft 协议的核心区别，并绘制了流程图。</p>
+<div class="flex gap-2">
+<span class="px-2.5 py-1 rounded-md bg-black/5 text-[10px] font-bold text-on-surface-variant">后端</span>
+<span class="px-2.5 py-1 rounded-md bg-black/5 text-[10px] font-bold text-on-surface-variant">架构</span>
+</div>
+</div>
+</div>
+<!-- Log 3 -->
+<div class="flex gap-8 relative">
+<div class="flex flex-col items-center">
+<div class="w-12 h-12 rounded-2xl bg-black/[0.03] text-on-surface-variant flex items-center justify-center border border-black/5">
+<span class="material-symbols-outlined text-[24px]" data-icon="schedule">schedule</span>
+</div>
+<div class="w-px flex-1 bg-black/5 my-2"></div>
+</div>
+<div class="flex-1 pb-2">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-bold text-on-surface text-base">持续专注学习：120 分钟</h4>
+<span class="text-xs font-semibold text-on-surface-variant">10月23日</span>
+</div>
+<p class="text-body-md text-on-surface-variant leading-relaxed mb-4">在此期间未进行任何应用切换，专注度评分为 98%。</p>
+<div class="flex gap-2">
+<span class="px-2.5 py-1 rounded-md bg-green-50 text-[10px] font-bold text-green-600 border border-green-100">专注力巅峰</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Action Button -->
+<button class="fixed bottom-12 right-12 w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center shadow-xl shadow-primary/30 hover:scale-110 active:scale-95 transition-all z-50">
+
+</button>
+
+
+</body></html>
+
+<!-- 资源管理器 (极简版) - VideoTracker -->
+<!DOCTYPE html><html class="light" lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>VideoTracker | 资源管理器</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+        }
+        
+        body {
+            background-color: #F5F5F7;
+            color: #1D1D1F;
+            overflow-x: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .apple-card {
+            background: #FFFFFF;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .apple-card:hover {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .glass-modal {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-active { background-color: #34C759; }
+        .status-sync { background-color: #007AFF; }
+
+        .system-blue-btn {
+            background-color: #007AFF;
+            color: white;
+            transition: all 0.2s ease;
+        }
+
+        .system-blue-btn:hover {
+            background-color: #0062CC;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "primary": "#007AFF",
+                "on-primary": "#FFFFFF",
+                "surface": "#FFFFFF",
+                "background": "#F5F5F7",
+                "on-surface": "#1D1D1F",
+                "on-surface-variant": "#86868B",
+                "outline": "#D2D2D7"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.5rem",
+                "lg": "0.75rem",
+                "xl": "1rem",
+                "2xl": "1.25rem",
+                "3xl": "1.5rem",
+                "full": "9999px"
+            },
+            "fontFamily": {
+                "headline-md": ["Outfit"],
+                "display-lg": ["Outfit"],
+                "label-sm": ["Inter"],
+                "title-lg": ["Outfit"],
+                "body-md": ["Inter"],
+                "body-lg": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+</head>
+<body class="font-body-md text-on-surface">
+<!-- Side Navigation Shell -->
+<nav class="fixed left-0 top-0 h-full flex flex-col bg-white border-r border-gray-100 w-64 z-50">
+<div class="p-8">
+<div class="font-headline-md text-headline-md font-bold text-black">VideoTracker</div>
+<div class="font-body-md text-body-md text-on-surface-variant opacity-70">高级学习中心</div>
+</div>
+<div class="flex-1 px-4 space-y-1 py-4">
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 text-on-surface-variant hover:text-black hover:bg-gray-50 group" href="#">
+<span class="material-symbols-outlined text-gray-400 group-hover:text-black" data-icon="dashboard">dashboard</span>
+<span class="font-medium">学习仪表盘</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 text-primary bg-blue-50 font-semibold group" href="#">
+<span class="material-symbols-outlined" data-icon="folder">folder</span>
+<span class="font-medium">课程目录</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 text-on-surface-variant hover:text-black hover:bg-gray-50 group" href="#">
+<span class="material-symbols-outlined text-gray-400 group-hover:text-black" data-icon="cloud">cloud</span>
+<span class="font-medium">云端库</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 text-on-surface-variant hover:text-black hover:bg-gray-50 group" href="#">
+<span class="material-symbols-outlined text-gray-400 group-hover:text-black" data-icon="analytics">analytics</span>
+<span class="font-medium">学习进度</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 text-on-surface-variant hover:text-black hover:bg-gray-50 group" href="#">
+<span class="material-symbols-outlined text-gray-400 group-hover:text-black" data-icon="settings">settings</span>
+<span class="font-medium">设置</span>
+</a>
+</div>
+<div class="p-6">
+<button class="w-full system-blue-btn py-3 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-sm active:scale-95">
+
+            开始学习
+        </button>
+</div>
+</nav>
+<!-- Top App Bar -->
+
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-24 px-10 pb-12 min-h-screen">
+<div class="max-w-[1200px] mx-auto">
+<!-- Header Section -->
+<div class="flex justify-between items-end mb-12">
+<div>
+<h1 class="text-4xl font-bold tracking-tight text-black mb-2">存储源管理</h1>
+<p class="text-on-surface-variant text-lg">管理您的本地与云端视频库，保持数据同步。</p>
+</div>
+<button class="system-blue-btn px-6 py-2.5 rounded-full font-semibold flex items-center gap-2 shadow-sm transition-transform hover:scale-[1.02]" onclick="toggleModal(true)">
+<span class="material-symbols-outlined text-lg" data-icon="add">add</span>
+                连接新来源
+            </button>
+</div>
+<!-- Dashboard Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Local Folder Card -->
+<div class="apple-card p-6 rounded-2xl flex flex-col h-full group">
+<div class="flex items-center gap-4 mb-6">
+<div class="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400">
+<span class="material-symbols-outlined text-2xl" data-icon="folder">folder</span>
+</div>
+<div>
+<h3 class="font-bold text-black">本地文件夹</h3>
+<p class="text-on-surface-variant text-xs truncate w-40">D:/Media/Courses/WebDev</p>
+</div>
+</div>
+<div class="flex-grow">
+<div class="flex items-center gap-2 text-sm text-on-surface-variant">
+<span class="status-dot status-active"></span>
+                        23 个视频 | 状态: 活跃中
+                    </div>
+</div>
+<div class="mt-8 flex gap-2">
+<button class="flex-1 py-2 text-sm font-semibold rounded-lg bg-gray-50 text-black hover:bg-gray-100 transition-colors">查看文件</button>
+<button class="px-3 py-2 rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 transition-colors"><span class="material-symbols-outlined text-lg" data-icon="refresh">refresh</span></button>
+</div>
+</div>
+<!-- WebDAV Card -->
+<div class="apple-card p-6 rounded-2xl flex flex-col h-full group">
+<div class="flex items-center gap-4 mb-6">
+<div class="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400">
+<span class="material-symbols-outlined text-2xl" data-icon="dns">dns</span>
+</div>
+<div>
+<h3 class="font-bold text-black">WebDAV</h3>
+<p class="text-on-surface-variant text-xs truncate w-40">nas.local:5005</p>
+</div>
+</div>
+<div class="flex-grow">
+<div class="flex items-center gap-2 text-sm text-on-surface-variant">
+<span class="status-dot status-active"></span>
+                        142 个视频 | 状态: 活跃中
+                    </div>
+</div>
+<div class="mt-8 flex gap-2">
+<button class="flex-1 py-2 text-sm font-semibold rounded-lg bg-gray-50 text-black hover:bg-gray-100 transition-colors">管理连接</button>
+<button class="px-3 py-2 rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 transition-colors"><span class="material-symbols-outlined text-lg" data-icon="settings">settings</span></button>
+</div>
+</div>
+<!-- Alist Card -->
+<div class="apple-card p-6 rounded-2xl flex flex-col h-full group">
+<div class="flex items-center gap-4 mb-6">
+<div class="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400">
+<span class="material-symbols-outlined text-2xl" data-icon="api">api</span>
+</div>
+<div>
+<h3 class="font-bold text-black">Alist</h3>
+<p class="text-on-surface-variant text-xs truncate w-40">alist.learning.com</p>
+</div>
+</div>
+<div class="flex-grow">
+<div class="flex items-center gap-2 text-sm text-on-surface-variant">
+<span class="status-dot status-sync"></span>
+                        856 个视频 | 状态: 同步中...
+                    </div>
+</div>
+<div class="mt-8 flex gap-2">
+<button class="flex-1 py-2 text-sm font-semibold rounded-lg bg-gray-50 text-black hover:bg-gray-100 transition-colors">查看目录</button>
+<button class="px-3 py-2 rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 transition-colors"><span class="material-symbols-outlined text-lg" data-icon="sync">sync</span></button>
+</div>
+</div>
+</div>
+<!-- Recent Activity -->
+<div class="mt-16">
+<h2 class="text-xl font-bold text-black mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl" data-icon="show_chart">show_chart</span>
+                最近索引进度
+            </h2>
+<div class="apple-card p-8 rounded-2xl">
+<div class="h-32 w-full flex items-end gap-1.5 overflow-hidden px-2">
+<div class="flex-1 bg-blue-100 h-1/4 rounded-sm"></div>
+<div class="flex-1 bg-blue-200 h-1/3 rounded-sm"></div>
+<div class="flex-1 bg-blue-400 h-1/2 rounded-sm"></div>
+<div class="flex-1 bg-primary h-2/3 rounded-sm"></div>
+<div class="flex-1 bg-blue-300 h-1/2 rounded-sm"></div>
+<div class="flex-1 bg-blue-100 h-1/5 rounded-sm"></div>
+<div class="flex-1 bg-blue-200 h-1/4 rounded-sm"></div>
+<div class="flex-1 bg-primary h-3/4 rounded-sm"></div>
+<div class="flex-1 bg-blue-400 h-1/2 rounded-sm"></div>
+<div class="flex-1 bg-blue-100 h-1/6 rounded-sm"></div>
+<div class="flex-1 bg-blue-200 h-1/3 rounded-sm"></div>
+<div class="flex-1 bg-blue-100 h-1/4 rounded-sm"></div>
+<div class="flex-1 bg-primary h-2/3 rounded-sm"></div>
+<div class="flex-1 bg-blue-500 h-full rounded-sm"></div>
+<div class="flex-1 bg-blue-400 h-1/2 rounded-sm"></div>
+</div>
+<div class="flex justify-between mt-4 text-xs font-medium text-on-surface-variant">
+<span class="">24 小时前</span>
+<span class="">刚刚</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Modal Overlay -->
+<div class="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none opacity-0 transition-opacity duration-300" id="connectionModal">
+<div class="absolute inset-0 bg-black/10 backdrop-blur-sm modal-bg-closer cursor-pointer"></div>
+<div class="glass-modal w-full max-w-lg p-8 rounded-3xl relative z-10 scale-95 transition-transform duration-300 transform" id="modalContent">
+<button class="absolute top-6 right-6 text-gray-400 hover:text-black transition-colors" onclick="toggleModal(false)">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+<div class="text-center mb-10">
+<div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-50 text-primary mb-4">
+<span class="material-symbols-outlined text-3xl" data-icon="add_link">add_link</span>
+</div>
+<h2 class="text-2xl font-bold text-black">连接新来源</h2>
+<p class="text-on-surface-variant text-sm mt-2">添加您的服务器地址以同步视频资源</p>
+</div>
+<form class="space-y-6" onsubmit="event.preventDefault();">
+<div>
+<label class="block text-xs font-bold text-black mb-2 uppercase tracking-wider">服务器地址 (Server URL)</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" data-icon="link">link</span>
+<input class="w-full bg-white border border-gray-200 rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-blue-100 focus:border-primary outline-none transition-all text-sm text-black" placeholder="https://example.com/dav" type="text">
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="block text-xs font-bold text-black mb-2 uppercase tracking-wider">用户名 (Username)</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" data-icon="person">person</span>
+<input class="w-full bg-white border border-gray-200 rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-blue-100 focus:border-primary outline-none transition-all text-sm text-black" placeholder="admin" type="text">
+</div>
+</div>
+<div>
+<label class="block text-xs font-bold text-black mb-2 uppercase tracking-wider">密码 (Password)</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" data-icon="lock">lock</span>
+<input class="w-full bg-white border border-gray-200 rounded-xl pl-12 pr-4 py-3 focus:ring-2 focus:ring-blue-100 focus:border-primary outline-none transition-all text-sm text-black" placeholder="••••••••" type="password">
+</div>
+</div>
+</div>
+<div class="pt-4">
+<button class="w-full system-blue-btn py-4 rounded-xl font-bold text-base shadow-lg shadow-blue-500/20 transition-all duration-200 hover:shadow-blue-500/30 active:scale-95">
+                    立即连接
+                </button>
+</div>
+<div class="text-center">
+<p class="text-on-surface-variant text-xs">支持 WebDAV, Alist, Local SMB 等多种协议</p>
+</div>
+</form>
+</div>
+</div>
+<script>
+    function toggleModal(show) {
+        const modal = document.getElementById('connectionModal');
+        const content = document.getElementById('modalContent');
+        if (show) {
+            modal.classList.remove('pointer-events-none', 'opacity-0');
+            content.classList.remove('scale-95');
+            content.classList.add('scale-100');
+        } else {
+            modal.classList.add('pointer-events-none', 'opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+        }
+    }
+
+    // Close on backdrop click
+    document.querySelector('.modal-bg-closer').addEventListener('click', () => toggleModal(false));
+</script>
+
+
+
+
+
+
+</body></html>

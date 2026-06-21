@@ -4,6 +4,10 @@
 
 ## 提交历史日志 (Git Commit Logs)
 
-*   **Initial Commit**
+*   **Initial Commit** (ff2c512)
     *   **时间**: 2026-06-21
     *   **描述**: 初始化项目目录，创建项目 Git 仓库与 `agent.md` 记录文件。
+
+*   **feat: scaffolding project framework**
+    *   **时间**: 2026-06-21
+    *   **描述**: 完成 Electron + React + TypeScript + Vite + Tailwind CSS 脚手架搭建，编写主进程入口、Preload 预加载 API 以及开发/构建自动化脚本。
