@@ -51,7 +51,7 @@ export default function Dashboard({
     : 0;
 
   return (
-    <div className="glass-panel rounded-2xl flex flex-wrap items-center justify-between p-5 border-l-4 border-primary bg-white/80 gap-6 w-full shadow-sm">
+    <div className="glass-panel rounded-2xl flex flex-wrap items-center justify-between p-5 border-l-4 border-primary bg-white/80 gap-6 w-full shadow-sm relative z-20 overflow-visible">
       {/* 1. 当前媒体库基本信息 */}
       <div className="flex flex-col min-w-[200px] flex-1 max-w-full">
         <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">当前课程媒体库</span>
@@ -72,7 +72,7 @@ export default function Dashboard({
       </div>
 
       {/* 2. 计划调节输入区 (精致微灰胶囊条) */}
-      <div className="flex flex-wrap items-center gap-5 min-w-[240px] flex-1 py-2 px-4 bg-black/[0.02] border border-black/5 rounded-xl">
+      <div className="flex flex-wrap items-center gap-5 min-w-[240px] flex-1 py-2 px-4 bg-black/[0.02] border border-black/5 rounded-xl overflow-visible">
         {currentSource?.type === 'local' ? (
           <>
             <div className="flex flex-col">
