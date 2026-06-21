@@ -375,6 +375,61 @@ app.whenReady().then(() => {
     }
   });
 
+  // 打开数据文件夹
+  ipcMain.handle('db:openStorageFolder', async () => {
+    try {
+      const currentPath = getStorageDirectory();
+      if (fs.existsSync(currentPath)) {
+        const { shell } = require('electron');
+        await shell.openPath(currentPath);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error opening storage folder:', err);
+      return false;
+    }
+  });
+
+  // 获取当前数据占用大小
+  ipcMain.handle('db:getStorageSize', async () => {
+    try {
+      const currentPath = getStorageDirectory();
+      if (!fs.existsSync(currentPath)) return '0 B';
+      const files = fs.readdirSync(currentPath);
+      const jsonFiles = files.filter(f => f.endsWith('.json') && f !== 'path_config.json');
+      let totalSize = 0;
+      for (const file of jsonFiles) {
+        const filePath = path.join(currentPath, file);
+        const stat = fs.statSync(filePath);
+        totalSize += stat.size;
+      }
+      
+      if (totalSize === 0) return '0 B';
+      if (totalSize < 1024) return `${totalSize} B`;
+      if (totalSize < 1024 * 1024) return `${(totalSize / 1024).toFixed(1)} KB`;
+      return `${(totalSize / (1024 * 1024)).toFixed(1)} MB`;
+    } catch (err) {
+      console.error('Error getting storage size:', err);
+      return '未知';
+    }
+  });
+
+  // 重置数据存储路径
+  ipcMain.handle('db:resetStoragePath', async () => {
+    try {
+      const defaultPath = app.getPath('userData');
+      const configPathFile = path.join(defaultPath, 'path_config.json');
+      if (fs.existsSync(configPathFile)) {
+        fs.unlinkSync(configPathFile);
+      }
+      return { success: true, defaultPath };
+    } catch (err: any) {
+      console.error('Reset storage path error:', err);
+      return { success: false, error: err.message || '重置失败' };
+    }
+  });
+
   // 获取当前数据存储路径
   ipcMain.handle('db:getStoragePath', async () => {
     return getStorageDirectory();

@@ -26,4 +26,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 本地数据路径管理与迁移
   getStoragePath: () => ipcRenderer.invoke('db:getStoragePath'),
   migrateStorage: (newPath: string, moveData: boolean) => ipcRenderer.invoke('db:migrateStorage', newPath, moveData),
+  openStorageFolder: () => ipcRenderer.invoke('db:openStorageFolder'),
+  getStorageSize: () => ipcRenderer.invoke('db:getStorageSize'),
+  resetStoragePath: () => ipcRenderer.invoke('db:resetStoragePath'),
 });
