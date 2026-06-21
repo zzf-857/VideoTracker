@@ -29,4 +29,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openStorageFolder: () => ipcRenderer.invoke('db:openStorageFolder'),
   getStorageSize: () => ipcRenderer.invoke('db:getStorageSize'),
   resetStoragePath: () => ipcRenderer.invoke('db:resetStoragePath'),
+  openDefaultAppFolder: () => ipcRenderer.invoke('db:openDefaultAppFolder'),
+  getDefaultAppPath: () => ipcRenderer.invoke('db:getDefaultAppPath'),
 });

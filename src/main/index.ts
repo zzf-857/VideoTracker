@@ -430,6 +430,27 @@ app.whenReady().then(() => {
     }
   });
 
+  // 打开默认应用文件夹 (缓存目录)
+  ipcMain.handle('db:openDefaultAppFolder', async () => {
+    try {
+      const defaultPath = app.getPath('userData');
+      if (fs.existsSync(defaultPath)) {
+        const { shell } = require('electron');
+        await shell.openPath(defaultPath);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error opening default AppData folder:', err);
+      return false;
+    }
+  });
+
+  // 获取默认应用路径
+  ipcMain.handle('db:getDefaultAppPath', async () => {
+    return app.getPath('userData');
+  });
+
   // 获取当前数据存储路径
   ipcMain.handle('db:getStoragePath', async () => {
     return getStorageDirectory();

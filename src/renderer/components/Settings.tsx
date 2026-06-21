@@ -35,6 +35,7 @@ interface SettingsProps {
   const [storageSize, setStorageSize] = useState('0 B');
   const [newSelectedPath, setNewSelectedPath] = useState('');
   const [isMigrating, setIsMigrating] = useState(false);
+  const [defaultAppPath, setDefaultAppPath] = useState('');
 
   useEffect(() => {
     storageService.loadData().then(data => {
@@ -55,6 +56,11 @@ interface SettingsProps {
       if (window.electronAPI.getStorageSize) {
         window.electronAPI.getStorageSize().then((size: string) => {
           setStorageSize(size);
+        });
+      }
+      if (window.electronAPI.getDefaultAppPath) {
+        window.electronAPI.getDefaultAppPath().then((path: string) => {
+          setDefaultAppPath(path);
         });
       }
     }
@@ -130,6 +136,17 @@ interface SettingsProps {
       const opened = await window.electronAPI.openStorageFolder();
       if (!opened) {
         showToast('打开文件夹失败，请检查目录是否存在');
+      }
+    } else {
+      alert('该功能仅在桌面端可用');
+    }
+  };
+
+  const handleOpenDefaultFolder = async () => {
+    if (window.electronAPI && window.electronAPI.openDefaultAppFolder) {
+      const opened = await window.electronAPI.openDefaultAppFolder();
+      if (!opened) {
+        showToast('打开缓存文件夹失败');
       }
     } else {
       alert('该功能仅在桌面端可用');
@@ -444,6 +461,29 @@ interface SettingsProps {
                   </p>
                 </div>
               )}
+
+              {/* 系统缓存与临时文件部分 */}
+              <div className="pt-3 border-t border-black/5">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">系统缓存与临时目录</label>
+                  <button
+                    onClick={handleOpenDefaultFolder}
+                    className="px-2.5 py-1 bg-black/[0.04] text-on-surface hover:bg-black/[0.08] active:scale-95 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                    title="在文件管理器中打开系统缓存目录"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">folder_open</span>
+                    打开缓存目录
+                  </button>
+                </div>
+                <div className="p-3 bg-black/[0.01] border border-black/5 rounded-xl text-xs space-y-1.5">
+                  <div className="text-[10px] font-mono break-all text-on-surface-variant/80 select-all" title="双击或拖拽可复制">
+                    {defaultAppPath}
+                  </div>
+                  <p className="text-[10px] text-on-surface-variant leading-relaxed">
+                    <strong>💡 缓存建议：</strong>该目录包含网页及 GPU 硬件加速缓存，会随着播放与页面访问逐渐增加，但 Chromium 内核会自动将总大小限制在 200MB - 500MB 以内并在达到上限后执行自动清理，不会无限变大。您可以随时手动清除该目录下除 <code className="bg-black/5 px-1 py-0.2 rounded text-primary">path_config.json</code> 以外的所有缓存文件夹。<strong>是否清理最终取决于您自己。</strong>
+                  </p>
+                </div>
+              </div>
 
               <p className="text-[10px] text-on-surface-variant/80 leading-relaxed pt-1">
                 提示：默认保存在系统 AppData 目录下。修改路径可以将学习进度、配置等存放到您的云同步同步盘或其它目录。在一键重置设置时，存储路径也会一并恢复为默认。
