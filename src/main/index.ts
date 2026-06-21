@@ -118,6 +118,34 @@ function startStreamServer() {
 
     try {
       const urlObj = new URL(req.url || '', `http://${req.headers.host}`);
+      
+      // 拦截缩略图请求
+      if (urlObj.pathname === '/thumbnail') {
+        const videoPath = urlObj.searchParams.get('videoPath');
+        const time = urlObj.searchParams.get('time');
+        if (!videoPath || !time) {
+          res.writeHead(400);
+          res.end('Missing parameters');
+          return;
+        }
+        
+        const hash = crypto.createHash('md5').update(videoPath).digest('hex');
+        const baseDir = getStorageDirectory();
+        const thumbPath = path.join(baseDir, 'thumbnails', hash, `${time}.jpg`);
+        
+        if (fs.existsSync(thumbPath)) {
+          res.writeHead(200, {
+            'Content-Type': 'image/jpeg',
+            'Cache-Control': 'public, max-age=31536000'
+          });
+          fs.createReadStream(thumbPath).pipe(res);
+        } else {
+          res.writeHead(404);
+          res.end('Thumbnail not found');
+        }
+        return;
+      }
+
       const filePathQuery = urlObj.searchParams.get('path');
       if (!filePathQuery) {
         res.writeHead(400);
@@ -272,11 +300,13 @@ function scanDirectory(dirPath: string): FileNode[] {
 // 3. 创建应用窗口
 function createWindow() {
   const preloadPath = path.join(__dirname, 'preload.js');
+  const iconPath = path.join(__dirname, '../Assets/app.ico');
 
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     titleBarStyle: 'default', // 标准窗口控制栏，贴合原生质感
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
@@ -540,6 +570,64 @@ app.whenReady().then(() => {
       return true;
     }
     return false;
+  });
+
+  // 检查缩略图存在性
+  ipcMain.handle('thumbnails:check', async (_event, videoPath: string, times: number[]) => {
+    try {
+      const hash = crypto.createHash('md5').update(videoPath).digest('hex');
+      const baseDir = getStorageDirectory();
+      const folderPath = path.join(baseDir, 'thumbnails', hash);
+      if (!fs.existsSync(folderPath)) {
+        return [];
+      }
+      return times.filter(time => {
+        return fs.existsSync(path.join(folderPath, `${time}.jpg`));
+      });
+    } catch (err) {
+      console.error('Error checking thumbnails:', err);
+      return [];
+    }
+  });
+
+  // 保存缩略图
+  ipcMain.handle('thumbnails:save', async (_event, videoPath: string, time: number, base64Data: string) => {
+    try {
+      const hash = crypto.createHash('md5').update(videoPath).digest('hex');
+      const baseDir = getStorageDirectory();
+      const folderPath = path.join(baseDir, 'thumbnails', hash);
+      
+      if (!fs.existsSync(folderPath)) {
+        fs.mkdirSync(folderPath, { recursive: true });
+      }
+      
+      const filePath = path.join(folderPath, `${time}.jpg`);
+      const base64Image = base64Data.replace(/^data:image\/\w+;base64,/, '');
+      const dataBuffer = Buffer.from(base64Image, 'base64');
+      
+      fs.writeFileSync(filePath, dataBuffer);
+      return true;
+    } catch (err) {
+      console.error('Error saving thumbnail:', err);
+      return false;
+    }
+  });
+
+  // 清除缩略图缓存
+  ipcMain.handle('thumbnails:clear', async (_event, videoPath: string) => {
+    try {
+      const hash = crypto.createHash('md5').update(videoPath).digest('hex');
+      const baseDir = getStorageDirectory();
+      const folderPath = path.join(baseDir, 'thumbnails', hash);
+      
+      if (fs.existsSync(folderPath)) {
+        fs.rmSync(folderPath, { recursive: true, force: true });
+      }
+      return true;
+    } catch (err) {
+      console.error('Error clearing thumbnails:', err);
+      return false;
+    }
   });
 
   createWindow();

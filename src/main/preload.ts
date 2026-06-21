@@ -31,4 +31,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resetStoragePath: () => ipcRenderer.invoke('db:resetStoragePath'),
   openDefaultAppFolder: () => ipcRenderer.invoke('db:openDefaultAppFolder'),
   getDefaultAppPath: () => ipcRenderer.invoke('db:getDefaultAppPath'),
+
+  // 缩略图生成与清理管理
+  checkThumbnails: (videoPath: string, times: number[]) => ipcRenderer.invoke('thumbnails:check', videoPath, times),
+  saveThumbnail: (videoPath: string, time: number, base64Data: string) => ipcRenderer.invoke('thumbnails:save', videoPath, time, base64Data),
+  clearThumbnails: (videoPath: string) => ipcRenderer.invoke('thumbnails:clear', videoPath),
 });

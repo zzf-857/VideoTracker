@@ -17,6 +17,8 @@ interface PlayerProps {
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onPlayStateChange?: (isPlaying: boolean) => void;
   onEnded?: () => void;
+  activeChapters?: any[]; // 新增：当前章节列表
+  seekSignal?: { seconds: number; time: number } | null; // 新增：跳转信号
 }
 
 export default function Player({
@@ -28,7 +30,9 @@ export default function Player({
   hotkeys,
   onTimeUpdate,
   onPlayStateChange,
-  onEnded
+  onEnded,
+  activeChapters = [],
+  seekSignal
 }: PlayerProps) {
   const artRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<Artplayer | null>(null);
@@ -36,6 +40,12 @@ export default function Player({
   // 1. 初始化和销毁 ArtPlayer
   useEffect(() => {
     if (!artRef.current) return;
+
+    // 格式化 highlight
+    const highlight = activeChapters.map(c => ({
+      time: c.time,
+      text: c.text
+    }));
 
     // 初始化 ArtPlayer
     const art = new Artplayer({
@@ -67,10 +77,124 @@ export default function Player({
       theme: '#0071E3', // Apple Blue 主色
       customType: {},
       plugins: [],
+      highlight,
       hotkey: false, // 禁用 ArtPlayer 默认自带的快捷键，防止与自定义热键重复触发冲突
     });
 
     playerInstanceRef.current = art;
+
+    // 物理进度条分割线绘制
+    const updateProgressGaps = () => {
+      const duration = art.duration;
+      if (!duration || duration <= 0 || !activeChapters || activeChapters.length === 0) return;
+      
+      let gapContainer = art.template.$progress.querySelector('.custom-progress-gaps') as HTMLElement;
+      if (gapContainer) {
+        gapContainer.innerHTML = '';
+      } else {
+        gapContainer = document.createElement('div');
+        gapContainer.className = 'custom-progress-gaps';
+        gapContainer.style.position = 'absolute';
+        gapContainer.style.inset = '0';
+        gapContainer.style.pointerEvents = 'none';
+        gapContainer.style.zIndex = '10';
+        art.template.$progress.appendChild(gapContainer);
+      }
+
+      activeChapters.forEach(chapter => {
+        if (chapter.time <= 0 || chapter.time >= duration) return;
+        const pct = (chapter.time / duration) * 100;
+        
+        const gap = document.createElement('div');
+        gap.className = 'progress-gap-line';
+        gap.style.position = 'absolute';
+        gap.style.left = `${pct}%`;
+        gap.style.top = '0';
+        gap.style.bottom = '0';
+        gap.style.width = '2px';
+        gap.style.backgroundColor = '#000000'; // 用播放器背景色切断
+        gap.style.transform = 'translateX(-50%)';
+        
+        gapContainer.appendChild(gap);
+      });
+    };
+
+    // 进度条 Hover 缩略图增强
+    const progressEl = art.template.$progress;
+    const tipEl = art.template.$container.querySelector('.art-progress-tip') as HTMLElement;
+
+    const getChapterAtTime = (time: number) => {
+      if (!activeChapters || activeChapters.length === 0) return null;
+      let activeCh = activeChapters[0];
+      for (const ch of activeChapters) {
+        if (time >= ch.time) {
+          activeCh = ch;
+        } else {
+          break;
+        }
+      }
+      return activeCh;
+    };
+
+    let handleMouseMove: ((e: MouseEvent) => void) | null = null;
+    let handleMouseLeave: (() => void) | null = null;
+
+    if (progressEl && tipEl) {
+      handleMouseMove = (e: MouseEvent) => {
+        if (!activeChapters || activeChapters.length === 0 || art.duration <= 0) return;
+        
+        const rect = progressEl.getBoundingClientRect();
+        const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+        const hoverTime = pct * art.duration;
+        
+        const ch = getChapterAtTime(hoverTime);
+        if (!ch) return;
+
+        let streamOrigin = '';
+        try {
+          streamOrigin = new URL(videoUrl).origin;
+        } catch (err) {}
+
+        const thumbUrl = streamOrigin
+          ? `${streamOrigin}/thumbnail?videoPath=${encodeURIComponent(videoPath)}&time=${ch.time}`
+          : '';
+
+        let thumbContainer = tipEl.querySelector('.custom-tip-thumb-box') as HTMLElement;
+        if (!thumbContainer) {
+          thumbContainer = document.createElement('div');
+          thumbContainer.className = 'custom-tip-thumb-box';
+          thumbContainer.style.display = 'flex';
+          thumbContainer.style.flexDirection = 'column';
+          thumbContainer.style.alignItems = 'center';
+          thumbContainer.style.gap = '4px';
+          thumbContainer.style.marginBottom = '6px';
+          thumbContainer.style.padding = '2px';
+          thumbContainer.style.backgroundColor = 'rgba(0,0,0,0.85)';
+          thumbContainer.style.borderRadius = '8px';
+          thumbContainer.style.overflow = 'hidden';
+          thumbContainer.style.border = '1px solid rgba(255,255,255,0.15)';
+          
+          tipEl.insertBefore(thumbContainer, tipEl.firstChild);
+        }
+
+        thumbContainer.innerHTML = `
+          <img src="${thumbUrl}" style="width: 120px; height: 68px; object-fit: cover; border-radius: 6px; display: block;" onerror="this.style.display='none'" />
+          <div style="font-size: 9px; color: #fff; max-width: 120px; text-align: center; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 4px 0 4px; line-height: 1.2;">
+            ${ch.text}
+          </div>
+        `;
+      };
+
+      handleMouseLeave = () => {
+        const thumbContainer = tipEl.querySelector('.custom-tip-thumb-box') as HTMLElement;
+        if (thumbContainer) {
+          thumbContainer.remove();
+        }
+      };
+
+      progressEl.addEventListener('mousemove', handleMouseMove);
+      progressEl.addEventListener('mouseleave', handleMouseLeave);
+    }
 
     // 加载进度
     storageService.loadData().then(data => {
@@ -85,6 +209,15 @@ export default function Player({
     // 监听事件
     art.on('ready', () => {
       console.log('ArtPlayer is ready');
+      updateProgressGaps();
+    });
+
+    art.on('video:durationchange', () => {
+      updateProgressGaps();
+    });
+
+    art.on('resize', () => {
+      updateProgressGaps();
     });
 
     art.on('play', () => {
@@ -140,12 +273,18 @@ export default function Player({
     });
 
     return () => {
+      if (handleMouseMove && progressEl) {
+        progressEl.removeEventListener('mousemove', handleMouseMove);
+      }
+      if (handleMouseLeave && progressEl) {
+        progressEl.removeEventListener('mouseleave', handleMouseLeave);
+      }
       if (art) {
         art.destroy(true);
       }
       playerInstanceRef.current = null;
     };
-  }, [videoUrl, videoPath]);
+  }, [videoUrl, videoPath, activeChapters]);
 
   // 2. 同步外部倍速状态变化到播放器
   useEffect(() => {
@@ -155,6 +294,14 @@ export default function Player({
       }
     }
   }, [playbackSpeed]);
+
+  // 新增：监听外部跳转信号
+  useEffect(() => {
+    if (seekSignal && playerInstanceRef.current) {
+      playerInstanceRef.current.currentTime = seekSignal.seconds;
+      playerInstanceRef.current.notice.show = `跳转章节: ${seekSignal.seconds} 秒`;
+    }
+  }, [seekSignal]);
 
   // 3. 监听全局自定义快捷键（排除输入法和表单聚焦状态）
   useEffect(() => {
@@ -214,6 +361,7 @@ export default function Player({
       }
     };
     
+    window.dispatchEvent(new CustomEvent('player:pause-signal'));
     window.addEventListener('player:pause-signal', handlePauseSignal);
     return () => {
       window.removeEventListener('player:pause-signal', handlePauseSignal);

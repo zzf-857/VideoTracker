@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { storageService, DailyLog, PlayedVideoLog, MediaSourceConfig } from '../services/storage';
+import { storageService, DailyLog, PlayedVideoLog, MediaSourceConfig, getLocalDateString } from '../services/storage';
+import CustomSelect from './CustomSelect';
 
 interface AnalyticsProps {
   refreshSignal: number;
@@ -16,8 +17,21 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
   // 视图切换：'minute' (分钟) 或 'hour' (小时)
   const [unit, setUnit] = useState<'minute' | 'hour'>('minute');
 
-  // 时间段选择：最近 30 | 90 | 180 | 365 天
-  const [daysRange, setDaysRange] = useState<30 | 90 | 180 | 365>(365);
+  // 选中的年份（默认为今年）
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  const getAvailableYears = () => {
+    const years = new Set<number>();
+    years.add(new Date().getFullYear());
+    for (const dateStr of Object.keys(dailyLogs)) {
+      const yr = new Date(dateStr).getFullYear();
+      if (!isNaN(yr)) {
+        years.add(yr);
+      }
+    }
+    return Array.from(years).sort((a, b) => b - a);
+  };
+  const availableYears = getAvailableYears();
   
   // 右键菜单状态
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; dateStr: string; videoPath: string } | null>(null);
@@ -40,7 +54,7 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
       for (let i = 6; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(today.getDate() - i);
-        const dStr = d.toISOString().split('T')[0];
+        const dStr = getLocalDateString(d);
         weekly.push(data.dailyLogs[dStr] ? data.dailyLogs[dStr].totalDuration : 0);
       }
       setWeeklyDuration(weekly);
@@ -98,15 +112,16 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
     return unit === 'minute' ? '分钟' : '小时';
   };
 
-  // 生成年度热力图数据（全尺寸网格，永远固定为 365天，共53列）
-  const getFullYearGrid = () => {
-    const today = new Date();
+  // 生成指定年份的热力图数据（全尺寸网格，固定为当年 1月1日 起的 371天，共53列）
+  const getFullYearGrid = (year: number) => {
+    const todayStr = getLocalDateString();
     const grid = [];
+    const startDate = new Date(year, 0, 1); // 当年 1 月 1 日
     
-    for (let i = 364; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
+    for (let i = 0; i < 371; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      const dateStr = getLocalDateString(date);
       const log = dailyLogs[dateStr];
       const duration = log ? log.totalDuration : 0;
 
@@ -116,25 +131,23 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
       else if (duration > 1800) bgClass = 'bg-primary/55'; // >30m
       else if (duration > 0) bgClass = 'bg-primary/30'; // >0m
 
+      const isFuture = dateStr > todayStr;
+
       grid.push({
         dateStr,
         duration,
         bgClass,
         dayOfWeek: date.getDay(),
-        daysAgo: i
+        daysAgo: i,
+        isFuture
       });
     }
     return grid;
   };
 
-  const gridData = getFullYearGrid();
+  const gridData = getFullYearGrid(selectedYear);
   const columns: typeof gridData[] = [];
   let currentColumn: typeof gridData = [];
-
-  const firstDay = gridData.length > 0 ? gridData[0].dayOfWeek : 0;
-  for (let i = 0; i < firstDay; i++) {
-    currentColumn.push({ dateStr: '', duration: 0, bgClass: 'opacity-0 pointer-events-none', dayOfWeek: i, daysAgo: 999 });
-  }
 
   for (const cell of gridData) {
     currentColumn.push(cell);
@@ -143,54 +156,65 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
       currentColumn = [];
     }
   }
-  if (currentColumn.length > 0) {
-    while (currentColumn.length < 7) {
-      currentColumn.push({ dateStr: '', duration: 0, bgClass: 'opacity-0 pointer-events-none', dayOfWeek: currentColumn.length, daysAgo: 999 });
-    }
-    columns.push(currentColumn);
-  }
 
   // 动态计算底部对齐的月份标识
   const getMonthLabels = () => {
     let lastMonth = '';
+    const todayStr = getLocalDateString();
     return columns.map((col) => {
       const validCell = col.find(c => c.dateStr !== '');
       if (!validCell) return { label: '', isDim: true };
       const date = new Date(validCell.dateStr);
       const mName = `${date.getMonth() + 1}月`;
-      const hasActiveCell = col.some(c => c.dateStr !== '' && c.daysAgo < daysRange);
+      // 如果这一列全部都是未来的日子，说明属于未来月份，则淡出
+      const isFutureCol = col.every(c => c.dateStr > todayStr);
       if (mName !== lastMonth) {
         lastMonth = mName;
-        return { label: mName, isDim: !hasActiveCell };
+        return { label: mName, isDim: isFutureCol };
       }
-      return { label: '', isDim: !hasActiveCell };
+      return { label: '', isDim: isFutureCol };
     });
   };
   const monthLabels = getMonthLabels();
 
-  // 期间数据分析
-  const getRangeStats = (days: number) => {
+  // 选定年份的数据分析统计
+  const getYearStats = (year: number) => {
     let totalSecs = 0;
     let activeDays = 0;
-    const today = new Date();
+    const todayStr = getLocalDateString();
     
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
+    const startDate = new Date(year, 0, 1);
+    // 整个网格展示 371 天
+    for (let i = 0; i < 371; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      const dateStr = getLocalDateString(date);
       const log = dailyLogs[dateStr];
       if (log && log.totalDuration > 0) {
         totalSecs += log.totalDuration;
         activeDays++;
       }
     }
+    
+    // 计算分母
+    let elapsedDays = 0;
+    for (let i = 0; i < 371; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      const dateStr = getLocalDateString(date);
+      if (dateStr <= todayStr) {
+        elapsedDays++;
+      }
+    }
+    if (elapsedDays === 0) elapsedDays = 1;
+
     return {
       totalDuration: totalSecs,
       activeDays,
-      rate: Math.round((activeDays / days) * 100)
+      rate: Math.round((activeDays / elapsedDays) * 100)
     };
   };
-  const rangeStats = getRangeStats(daysRange);
+  const rangeStats = getYearStats(selectedYear);
 
   // 年度热力图固定 53 列等分正方形格子配置
   const heatmapConfig = {
@@ -324,30 +348,21 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
       </header>
 
       <div className="space-y-6">
-        {/* 1. 年度 365 天大热力图 (Spans full width) */}
+        {/* 1. 年度大热力图 (Spans full width) */}
         <section className="apple-card p-6 rounded-2xl bg-white/80 border border-black/5 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
             <h3 className="font-bold text-sm text-on-surface">
-              {daysRange === 365 ? '年度' : daysRange === 180 ? '半年' : daysRange === 90 ? '季度' : '月度'}学习热力图 (最近 {daysRange} 天)
+              {selectedYear} 年度学习热力图
             </h3>
             
-            {/* 时间间隔切换 Pills */}
+            {/* 年份选择下拉框与图例 */}
             <div className="flex items-center gap-4 self-end sm:self-auto">
-              <div className="flex bg-black/[0.04] p-1 rounded-xl gap-0.5 border border-black/5 scale-90 origin-right">
-                {([30, 90, 180, 365] as const).map(d => (
-                  <button
-                    key={d}
-                    onClick={() => setDaysRange(d)}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                      daysRange === d
-                        ? 'bg-white text-primary shadow-sm'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    {d}天
-                  </button>
-                ))}
-              </div>
+              <CustomSelect
+                value={selectedYear}
+                onChange={(val) => setSelectedYear(Number(val))}
+                options={availableYears.map(year => ({ value: year, label: `${year} 年` }))}
+                dropdownAlign="right"
+              />
 
               <div className="flex items-center gap-2 text-[10px] font-bold text-on-surface-variant uppercase">
                 <span>少</span>
@@ -376,13 +391,11 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                     <div
                       key={cellIdx}
                       className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-300 ${
-                        cell.daysAgo >= daysRange 
-                          ? (cell.duration > 0 
-                              ? 'opacity-[0.15] pointer-events-none scale-[0.95] saturate-[0.2]' 
-                              : 'opacity-[0.25] pointer-events-none scale-[0.95]')
-                          : 'opacity-100'
+                        cell.isFuture 
+                          ? 'opacity-[0.2] pointer-events-none scale-[0.95]' 
+                          : 'opacity-100 hover:scale-110 hover:shadow-md'
                       }`}
-                      title={cell.dateStr && cell.daysAgo < daysRange ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
+                      title={cell.dateStr ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
                     />
                   ))}
                 </div>

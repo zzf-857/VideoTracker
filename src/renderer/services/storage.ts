@@ -55,6 +55,7 @@ export interface AppDataStore {
   dailyLogs: Record<string, DailyLog>; // key 是 "YYYY-MM-DD"
   sources: MediaSourceConfig[];
   settings: AppSettings;
+  timelines?: Record<string, string>; // key 是视频的相对路径或唯一标识
 }
 
 const DEFAULT_DATA: AppDataStore = {
@@ -70,8 +71,16 @@ const DEFAULT_DATA: AppDataStore = {
       speedDown: 'x',
       speedReset: 'z'
     }
-  }
+  },
+  timelines: {}
 };
+
+export function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 class StorageService {
   private cache: AppDataStore | null = null;
@@ -104,7 +113,8 @@ class StorageService {
           speedDown: 'x',
           speedReset: 'z'
         }
-      }
+      },
+      timelines: this.cache?.timelines || {}
     };
 
     return this.cache;
@@ -123,6 +133,25 @@ class StorageService {
     }
   }
 
+  // 快捷方法：保存视频时间轴文本
+  async saveTimeline(videoPath: string, text: string): Promise<void> {
+    const data = await this.loadData();
+    if (!data.timelines) {
+      data.timelines = {};
+    }
+    data.timelines[videoPath] = text;
+    await this.saveData({ timelines: data.timelines });
+  }
+
+  // 快捷方法：删除视频时间轴文本
+  async deleteTimeline(videoPath: string): Promise<void> {
+    const data = await this.loadData();
+    if (data.timelines && data.timelines[videoPath]) {
+      delete data.timelines[videoPath];
+      await this.saveData({ timelines: data.timelines });
+    }
+  }
+
   // 快捷方法：更新单个视频进度
   async saveVideoProgress(videoKey: string, progress: Omit<VideoProgress, 'lastPlayedTime'>): Promise<void> {
     const data = await this.loadData();
@@ -138,7 +167,7 @@ class StorageService {
     if (durationSeconds <= 0) return;
     
     const data = await this.loadData();
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const nowTime = new Date().toTimeString().split(' ')[0].substring(0, 5); // "HH:MM"
 
     if (!data.dailyLogs[today]) {

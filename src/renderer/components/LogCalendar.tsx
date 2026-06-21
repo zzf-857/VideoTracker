@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { storageService, DailyLog, PlayedVideoLog, MediaSourceConfig } from '../services/storage';
+import { storageService, DailyLog, PlayedVideoLog, MediaSourceConfig, getLocalDateString } from '../services/storage';
 
 interface LogCalendarProps {
   refreshSignal: number;
@@ -17,7 +17,7 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
       setDailyLogs(data.dailyLogs);
       setSources(data.sources);
       
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateString();
       setSelectedDate(prev => prev || today);
       
       // 计算连续学习天数
@@ -31,13 +31,13 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
     let checkDate = new Date();
     
     // 检查今天是否学了，如果没有，从昨天开始算
-    const todayStr = checkDate.toISOString().split('T')[0];
+    const todayStr = getLocalDateString(checkDate);
     if (logs[todayStr] && logs[todayStr].totalDuration > 0) {
       streak = 1;
     } else {
       // 检查昨天
       checkDate.setDate(checkDate.getDate() - 1);
-      const yesterdayStr = checkDate.toISOString().split('T')[0];
+      const yesterdayStr = getLocalDateString(checkDate);
       if (logs[yesterdayStr] && logs[yesterdayStr].totalDuration > 0) {
         streak = 1;
       } else {
@@ -49,7 +49,7 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
     // 循环往前推算
     while (true) {
       checkDate.setDate(checkDate.getDate() - 1);
-      const dateStr = checkDate.toISOString().split('T')[0];
+      const dateStr = getLocalDateString(checkDate);
       if (logs[dateStr] && logs[dateStr].totalDuration > 0) {
         streak++;
       } else {
@@ -68,7 +68,7 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
     for (let i = 34; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = getLocalDateString(date);
       const log = dailyLogs[dateStr];
       const duration = log ? log.totalDuration : 0;
       
@@ -188,7 +188,7 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
         <div className="p-4 border-b border-black/5 flex items-center gap-2 bg-black/[0.01]">
           <span className="material-symbols-outlined text-[18px] text-on-surface">history</span>
           <span className="text-sm font-semibold text-on-surface">
-            {selectedDate === new Date().toISOString().split('T')[0] ? '今天' : selectedDate} 学习足迹
+            {selectedDate === getLocalDateString() ? '今天' : selectedDate} 学习足迹
           </span>
         </div>
         
