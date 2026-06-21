@@ -78,6 +78,11 @@ function makeProxyRequest(
         return;
       }
 
+      // 强加 CORS 头部以避开渲染进程的 Canvas 截图跨域限制
+      proxyRes.headers['access-control-allow-origin'] = '*';
+      proxyRes.headers['access-control-allow-methods'] = 'GET, OPTIONS';
+      proxyRes.headers['access-control-allow-headers'] = 'Range';
+
       // 将最终响应的状态码及头部透传给渲染进程，并建立数据通道管道
       res.writeHead(statusCode, proxyRes.headers);
       proxyRes.pipe(res);
@@ -311,6 +316,7 @@ function createWindow() {
       preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: false, // 关闭跨域安全限制，允许隐藏 video 和 canvas 完美截图
       backgroundThrottling: false, // 禁用后台限频，确保窗口在失焦/后台时定时器依然精准无阻地走字
     },
   });

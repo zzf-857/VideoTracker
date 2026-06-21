@@ -105,7 +105,6 @@ export default function App() {
     const video = document.createElement('video');
     video.src = activeVideoUrl;
     video.muted = true;
-    video.crossOrigin = 'anonymous';
 
     const generateNext = async (): Promise<void> => {
       if (queueRef.current.length === 0) return;
@@ -163,19 +162,30 @@ export default function App() {
       });
     };
 
+    let loadSuccess = true;
     await new Promise<void>((resolve) => {
       const onLoadedMetadata = () => {
         video.removeEventListener('loadedmetadata', onLoadedMetadata);
         resolve();
       };
       const onError = () => {
+        console.error('Failed to load video metadata for thumbnail extraction:', video.error);
         video.removeEventListener('error', onError);
+        loadSuccess = false;
         resolve();
       };
       video.addEventListener('loadedmetadata', onLoadedMetadata);
       video.addEventListener('error', onError);
       video.load();
     });
+
+    if (!loadSuccess) {
+      console.error('Thumbnail generation aborted: video load error.');
+      alert('视频加载失败或格式不支持，无法生成章节预览图。');
+      isGeneratingRef.current = false;
+      setGenerationProgress(null);
+      return;
+    }
 
     while (queueRef.current.length > 0) {
       if (!video.src || video.src !== activeVideoUrl) {
@@ -451,7 +461,6 @@ export default function App() {
         const video = document.createElement('video');
         video.preload = 'metadata';
         video.src = url;
-        video.crossOrigin = 'anonymous';
 
         const timeout = setTimeout(() => {
           cleanup();
