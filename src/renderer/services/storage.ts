@@ -13,6 +13,7 @@ export interface PlayedVideoLog {
   name: string;
   duration: number; // 当天观看的秒数
   time: string; // 播放的时间点, 如 "14:30"
+  sourceName?: string; // 视频来源名称
 }
 
 export interface DailyLog {
@@ -133,7 +134,7 @@ class StorageService {
   }
 
   // 快捷方法：增加今日学习时长与播放日志
-  async addLearningTime(videoPath: string, videoName: string, durationSeconds: number): Promise<void> {
+  async addLearningTime(videoPath: string, videoName: string, durationSeconds: number, sourceName?: string): Promise<void> {
     if (durationSeconds <= 0) return;
     
     const data = await this.loadData();
@@ -155,16 +156,42 @@ class StorageService {
     if (existingVideo) {
       existingVideo.duration += durationSeconds;
       existingVideo.time = nowTime; // 更新最后播放时间
+      if (sourceName) {
+        existingVideo.sourceName = sourceName;
+      }
     } else {
       todayLog.playedVideos.push({
         path: videoPath,
         name: videoName,
         duration: durationSeconds,
-        time: nowTime
+        time: nowTime,
+        sourceName: sourceName
       });
     }
 
     await this.saveData({ dailyLogs: data.dailyLogs });
+  }
+
+  // 快捷方法：删除指定日期下的特定视频观看记录
+  async deleteVideoLog(dateStr: string, videoPath: string): Promise<AppDataStore> {
+    const data = await this.loadData();
+    const log = data.dailyLogs[dateStr];
+    if (log) {
+      // 找出要删除的视频记录，并扣减总时间
+      const videoIndex = log.playedVideos.findIndex(v => v.path === videoPath);
+      if (videoIndex !== -1) {
+        const deletedDuration = log.playedVideos[videoIndex].duration;
+        log.totalDuration = Math.max(0, log.totalDuration - deletedDuration);
+        log.playedVideos.splice(videoIndex, 1);
+        
+        // 如果该日期没有视频记录了，可以直接删除该日期
+        if (log.playedVideos.length === 0) {
+          delete data.dailyLogs[dateStr];
+        }
+      }
+    }
+    await this.saveData({ dailyLogs: data.dailyLogs });
+    return data;
   }
 }
 

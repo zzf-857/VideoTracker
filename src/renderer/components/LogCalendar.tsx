@@ -3,12 +3,14 @@ import { storageService, DailyLog, PlayedVideoLog } from '../services/storage';
 
 interface LogCalendarProps {
   refreshSignal: number;
+  onRefresh: () => void;
 }
 
-export default function LogCalendar({ refreshSignal }: LogCalendarProps) {
+export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarProps) {
   const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLog>>({});
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [streakDays, setStreakDays] = useState(0);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; dateStr: string; videoPath: string } | null>(null);
 
   useEffect(() => {
     storageService.loadData().then(data => {
@@ -21,6 +23,13 @@ export default function LogCalendar({ refreshSignal }: LogCalendarProps) {
       calculateStreak(data.dailyLogs);
     });
   }, [refreshSignal]);
+
+  // 全局点击关闭右键菜单
+  useEffect(() => {
+    const handleCloseMenu = () => setContextMenu(null);
+    window.addEventListener('click', handleCloseMenu);
+    return () => window.removeEventListener('click', handleCloseMenu);
+  }, []);
 
   // 计算 GitHub 贡献连续学习天数
   const calculateStreak = (logs: Record<string, DailyLog>) => {
@@ -97,11 +106,38 @@ export default function LogCalendar({ refreshSignal }: LogCalendarProps) {
     return `${mins} 分钟`;
   };
 
+  // 获取视频来源文案
+  const getSourceLabel = (video: PlayedVideoLog) => {
+    if (video.sourceName) return video.sourceName;
+    if (video.path.startsWith('http://') || video.path.startsWith('https://')) {
+      return '网络源';
+    }
+    return '本地源';
+  };
+
+  // 触发右键菜单
+  const handleContextMenu = (e: React.MouseEvent, dateStr: string, videoPath: string) => {
+    e.preventDefault();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      dateStr,
+      videoPath
+    });
+  };
+
+  // 执行删除观看记录
+  const handleDeleteVideoLog = async (dateStr: string, videoPath: string) => {
+    if (!confirm('确定要删除该条观看记录吗？此操作将扣减当天的学习时间。')) return;
+    await storageService.deleteVideoLog(dateStr, videoPath);
+    onRefresh();
+  };
+
   const heatmapCells = getHeatmapGrid();
   const selectedLog = dailyLogs[selectedDate];
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6 h-full relative">
       {/* 活跃热力图卡片 */}
       <div className="bg-white/50 border border-black/5 rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
@@ -158,10 +194,20 @@ export default function LogCalendar({ refreshSignal }: LogCalendarProps) {
               
               <div className="space-y-2">
                 {selectedLog.playedVideos.map((video, idx) => (
-                  <div key={idx} className="p-3 bg-white border border-black/5 rounded-xl flex items-center justify-between hover:shadow-sm transition-all">
+                  <div 
+                    key={idx} 
+                    onContextMenu={(e) => handleContextMenu(e, selectedDate, video.path)}
+                    className="p-3 bg-white border border-black/5 rounded-xl flex items-center justify-between hover:shadow-sm transition-all relative select-none cursor-default"
+                    title="右键可删除该记录"
+                  >
                     <div className="flex flex-col flex-1 min-w-0 pr-3">
                       <span className="text-xs font-semibold text-on-surface truncate">{video.name}</span>
-                      <span className="text-[10px] text-on-surface-variant mt-0.5">播放于 {video.time}</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-on-surface-variant">播放于 {video.time}</span>
+                        <span className="text-[9px] text-primary/70 bg-primary/5 px-1 py-0.2 rounded-md font-medium">
+                          来源: {getSourceLabel(video)}
+                        </span>
+                      </div>
                     </div>
                     <span className="text-[11px] font-bold text-primary whitespace-nowrap bg-primary/5 px-2 py-1 rounded-lg">
                       + {formatDuration(video.duration)}
@@ -178,6 +224,26 @@ export default function LogCalendar({ refreshSignal }: LogCalendarProps) {
           )}
         </div>
       </div>
+
+      {/* 右键浮动上下文菜单 */}
+      {contextMenu && (
+        <div 
+          className="fixed bg-white border border-black/10 rounded-xl shadow-lg py-1 z-[200] min-w-28 text-xs text-red-500 animate-fade-in"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onMouseLeave={() => setContextMenu(null)}
+        >
+          <button 
+            onClick={() => {
+              handleDeleteVideoLog(contextMenu.dateStr, contextMenu.videoPath);
+              setContextMenu(null);
+            }}
+            className="w-full px-3 py-2 text-left hover:bg-red-50 flex items-center gap-1.5 cursor-pointer font-bold transition-colors"
+          >
+            <span className="material-symbols-outlined text-[14px]">delete</span>
+            删除该记录
+          </button>
+        </div>
+      )}
     </div>
   );
 }

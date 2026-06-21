@@ -233,7 +233,8 @@ export default function App() {
     videoName: activeVideoName,
     isPlaying: isPlaying,
     idleTimeoutMinutes: appData?.settings.idleTimeout || 15,
-    onIdleTimeout: handleIdleTimeout
+    onIdleTimeout: handleIdleTimeout,
+    sourceName: currentSource?.name || '本地'
   });
 
   // 维护一个运行期间时长获取失败的视频路径列表，避免无限重复重试
@@ -563,7 +564,7 @@ export default function App() {
         ) : currentTab === 'sources' ? (
           <SourceManager refreshSignal={refreshSignal} onRefresh={handleRefresh} />
         ) : currentTab === 'analytics' ? (
-          <Analytics refreshSignal={refreshSignal} />
+          <Analytics refreshSignal={refreshSignal} onRefresh={handleRefresh} />
         ) : (
           <Settings refreshSignal={refreshSignal} onRefresh={handleRefresh} />
         )}
@@ -635,7 +636,7 @@ export default function App() {
           }}
         >
           <div className="p-6 h-full overflow-y-auto custom-scrollbar">
-            <LogCalendar refreshSignal={refreshSignal} />
+            <LogCalendar refreshSignal={refreshSignal} onRefresh={handleRefresh} />
           </div>
         </div>
       )}

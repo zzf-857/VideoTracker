@@ -7,6 +7,7 @@ interface TimerOptions {
   isPlaying: boolean;
   idleTimeoutMinutes: number; // 闲置超时时长（分钟）
   onIdleTimeout?: () => void; // 闲置超时的回调（比如暂停播放器）
+  sourceName?: string; // 视频的来源名称
 }
 
 export function useTimer({
@@ -14,12 +15,14 @@ export function useTimer({
   videoName,
   isPlaying,
   idleTimeoutMinutes,
-  onIdleTimeout
+  onIdleTimeout,
+  sourceName
 }: TimerOptions) {
   const [sessionSeconds, setSessionSeconds] = useState(0); // 本次播放累加的学习秒数
   const isPlayingRef = useRef(isPlaying);
   const videoPathRef = useRef(videoPath);
   const videoNameRef = useRef(videoName);
+  const sourceNameRef = useRef(sourceName);
   const accumulatedSecondsRef = useRef(0); // 当前视频未保存的临时累加秒数
   
   // 闲置检测
@@ -37,14 +40,16 @@ export function useTimer({
       storageService.addLearningTime(
         videoPathRef.current,
         videoNameRef.current,
-        accumulatedSecondsRef.current
+        accumulatedSecondsRef.current,
+        sourceNameRef.current
       );
       accumulatedSecondsRef.current = 0;
       setSessionSeconds(0);
     }
     videoPathRef.current = videoPath;
     videoNameRef.current = videoName;
-  }, [videoPath, videoName]);
+    sourceNameRef.current = sourceName;
+  }, [videoPath, videoName, sourceName]);
 
   // 1. 每秒自动计时的核心定时器
   useEffect(() => {
@@ -64,7 +69,8 @@ export function useTimer({
           storageService.addLearningTime(
             videoPathRef.current,
             videoNameRef.current,
-            30
+            30,
+            sourceNameRef.current
           );
           accumulatedSecondsRef.current -= 30; // 扣减已保存的时间
         }
@@ -83,7 +89,8 @@ export function useTimer({
         storageService.addLearningTime(
           videoPathRef.current,
           videoNameRef.current,
-          accumulatedSecondsRef.current
+          accumulatedSecondsRef.current,
+          sourceNameRef.current
         );
         accumulatedSecondsRef.current = 0;
       }
@@ -142,7 +149,8 @@ export function useTimer({
       await storageService.addLearningTime(
         videoPathRef.current,
         videoNameRef.current,
-        accumulatedSecondsRef.current
+        accumulatedSecondsRef.current,
+        sourceNameRef.current
       );
       accumulatedSecondsRef.current = 0;
     }
