@@ -188,31 +188,31 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
   };
   const rangeStats = getRangeStats(daysRange);
 
-  // 自适应格子尺寸配置 (保持 Github 风格紧凑排列)
+  // 动态格子自适应配置 (铺满固定区间，扁平科技感)
   const heatmapConfig = {
     30: {
-      cellClass: 'w-6 h-6 rounded-md',
+      cellClass: 'w-full h-7 rounded-md',
+      colStyle: { flex: '1 1 0%', minWidth: '40px' },
       gapClass: 'gap-1.5',
-      containerGapClass: 'gap-1.5',
-      cellWidth: '24px'
+      containerGapClass: 'gap-1.5'
     },
     90: {
-      cellClass: 'w-4.5 h-4.5 rounded-[4px]',
+      cellClass: 'w-full h-5 rounded-[4px]',
+      colStyle: { flex: '1 1 0%', minWidth: '18px' },
       gapClass: 'gap-1',
-      containerGapClass: 'gap-1',
-      cellWidth: '18px'
+      containerGapClass: 'gap-1'
     },
     180: {
-      cellClass: 'w-3.5 h-3.5 rounded-[3px]',
+      cellClass: 'w-full h-4 rounded-[3px]',
+      colStyle: { flex: '1 1 0%', minWidth: '12px' },
       gapClass: 'gap-1',
-      containerGapClass: 'gap-1',
-      cellWidth: '14px'
+      containerGapClass: 'gap-1'
     },
     365: {
-      cellClass: 'w-2.5 h-2.5 rounded-[2px]',
+      cellClass: 'w-full h-2.5 rounded-[2px]',
+      colStyle: { flex: '1 1 0%', minWidth: '6px' },
       gapClass: 'gap-1',
-      containerGapClass: 'gap-1',
-      cellWidth: '10px'
+      containerGapClass: 'gap-1'
     }
   }[daysRange];
 
@@ -349,60 +349,38 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
             </div>
           </div>
 
-          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 overflow-x-auto pb-2 custom-scrollbar">
-            {/* 左侧：热力图网格（保持极致紧凑） */}
-            <div className="flex flex-col gap-1.5 w-fit shrink-0">
-              <div className={`flex ${heatmapConfig.containerGapClass} w-fit`}>
-                {columns.map((column, colIdx) => (
-                  <div key={colIdx} className={`flex flex-col ${heatmapConfig.gapClass}`}>
-                    {column.map((cell, cellIdx) => (
-                      <div
-                        key={cellIdx}
-                        className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-200`}
-                        title={cell.dateStr ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
-              
-              {/* 动态月份底部标识 */}
-              <div className={`flex ${heatmapConfig.containerGapClass} mt-2 select-none w-fit`}>
-                {monthLabels.map((label, idx) => (
-                  <div
-                    key={idx}
-                    style={{ width: heatmapConfig.cellWidth }}
-                    className="text-[9px] font-bold text-on-surface-variant text-left overflow-visible whitespace-nowrap"
-                  >
-                    {label}
-                  </div>
-                ))}
-              </div>
+          <div className="flex flex-col gap-1.5 overflow-x-auto pb-2 custom-scrollbar">
+            {/* 网格区：宽度 w-full，平分列宽，格子 w-full 自适应大小 */}
+            <div className={`flex ${heatmapConfig.containerGapClass} w-full min-w-max pb-1`}>
+              {columns.map((column, colIdx) => (
+                <div 
+                  key={colIdx} 
+                  style={heatmapConfig.colStyle} 
+                  className={`flex flex-col ${heatmapConfig.gapClass}`}
+                >
+                  {column.map((cell, cellIdx) => (
+                    <div
+                      key={cellIdx}
+                      className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-200`}
+                      title={cell.dateStr ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
             
-            {/* 右侧：当选择 30/90/180 天时，利用右侧多余空间展示区间统计指标（SaaS 简约卡片） */}
-            {daysRange < 365 && (
-              <div className="flex gap-6 p-4 bg-black/[0.02] border border-black/5 rounded-2xl min-w-[280px] self-start xl:self-center animate-fade-in shadow-inner">
-                <div className="flex-1 flex flex-col justify-center">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">区间学习时长</span>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-extrabold text-primary tracking-tight">{formatValue(rangeStats.totalDuration)}</span>
-                    <span className="text-[10px] text-on-surface-variant font-semibold">{getUnitLabel()}</span>
-                  </div>
+            {/* 动态月份底部标识：均分和宽度与上方列完全一致，保证完美的列对齐 */}
+            <div className={`flex ${heatmapConfig.containerGapClass} w-full min-w-max mt-2 select-none`}>
+              {monthLabels.map((label, idx) => (
+                <div
+                  key={idx}
+                  style={heatmapConfig.colStyle}
+                  className="text-[9px] font-bold text-on-surface-variant text-left overflow-visible whitespace-nowrap"
+                >
+                  {label}
                 </div>
-                
-                {/* 浅灰色垂直分割线 */}
-                <div className="w-[1px] bg-black/5 self-stretch" />
-                
-                <div className="flex-1 flex flex-col justify-center">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">打卡活跃率</span>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-extrabold text-primary tracking-tight">{rangeStats.rate}%</span>
-                    <span className="text-[10px] text-on-surface-variant font-semibold">({rangeStats.activeDays}天)</span>
-                  </div>
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         </section>
 
