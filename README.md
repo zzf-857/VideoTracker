@@ -1,4 +1,8 @@
-<h1 align="center">🎬 VideoTracker</h1>
+<p align="center">
+  <img src="Assets/app.png" alt="VideoTracker Logo" width="120"/>
+</p>
+
+<h1 align="center">VideoTracker</h1>
 
 <p align="center">
   <strong>专为自学者打造的视频学习进度追踪与数据分析仪表盘</strong>
