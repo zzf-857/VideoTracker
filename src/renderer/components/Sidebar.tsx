@@ -77,6 +77,52 @@ export default function Sidebar({
     return () => window.removeEventListener('click', handleCloseMenu);
   }, [contextMenu.visible]);
 
+  // 查找某个节点在文件树中的所有父目录路径
+  const findParentPaths = (nodes: TreeNode[], targetPath: string, currentParents: string[] = []): string[] | null => {
+    for (const node of nodes) {
+      if (node.path === targetPath) {
+        return currentParents;
+      }
+      if (node.isDir && node.children) {
+        const found = findParentPaths(node.children, targetPath, [...currentParents, node.path]);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  // 当选中的视频变化时，自动展开其父级目录并滚动到可视区域
+  useEffect(() => {
+    if (!activeVideoPath || fileTree.length === 0) return;
+    
+    // 1. 自动寻找并展开所有祖先目录
+    const parentPaths = findParentPaths(fileTree, activeVideoPath);
+    if (parentPaths && parentPaths.length > 0) {
+      setExpandedPaths(prev => {
+        const next = { ...prev };
+        let changed = false;
+        for (const p of parentPaths) {
+          if (!next[p]) {
+            next[p] = true;
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
+
+    // 2. 自动滚动到选中的节点
+    const timer = setTimeout(() => {
+      const activeEl = document.querySelector('[data-active-video="true"]');
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 250); // 稍微延迟以保证父级目录展开动画与 DOM 渲染完成
+
+    return () => clearTimeout(timer);
+  }, [activeVideoPath, fileTree]);
+
+
   // 手动切换完成状态
   const handleToggleFinishedStatus = async (
     videoPath: string,
@@ -375,6 +421,7 @@ export default function Sidebar({
         return (
           <div
             key={node.path}
+            data-active-video={isSelected ? "true" : "false"}
             style={{ paddingLeft: `${depth * 12 + 20}px` }}
             onClick={() => handlePlayVideo(node)}
             onContextMenu={(e) => {
@@ -602,6 +649,7 @@ export default function Sidebar({
                       return (
                         <div
                           key={video.path}
+                          data-active-video={isSelected ? "true" : "false"}
                           onClick={() => handlePlayVideo(video)}
                           onContextMenu={(e) => {
                             e.preventDefault();
