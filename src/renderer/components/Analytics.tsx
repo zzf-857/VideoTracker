@@ -407,7 +407,7 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
         </section>
 
         {/* 下方自适应双列排版 */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           {/* 左侧列：柱状图 & 统计概览 */}
           <div className="col-span-12 lg:col-span-5 space-y-6">
             {/* 最近 7 天趋势图 */}
@@ -563,8 +563,8 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
           </div>
 
           {/* 右侧列：历史时间轴 */}
-          <div className="col-span-12 lg:col-span-7">
-            <section className="apple-card flex flex-col rounded-2xl h-[470px] overflow-hidden bg-white/80 border border-black/5 shadow-sm transition-shadow hover:shadow-md">
+          <div className="col-span-12 lg:col-span-7 flex flex-col min-h-0">
+            <section className="apple-card flex flex-col rounded-2xl flex-1 overflow-hidden bg-white/80 border border-black/5 shadow-sm transition-shadow hover:shadow-md">
               <div className="p-4 border-b border-black/5">
                 <h3 className="font-bold text-sm text-on-surface">学习历史时间轴</h3>
               </div>
@@ -590,27 +590,38 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                       </div>
                       
                       <div className="space-y-1.5 mt-2">
-                        {log.playedVideos.map((video, vIdx) => (
-                          <div 
-                            key={vIdx} 
-                            onContextMenu={(e) => handleContextMenu(e, log.dateStr, video.path)}
-                            className="text-xs text-on-surface-variant flex items-center justify-between pl-2 border-l border-black/5 py-1 hover:bg-black/[0.02] rounded transition-colors cursor-default"
-                            title="右键可删除该记录"
-                          >
-                            <div className="flex flex-col min-w-0 pr-4">
-                              <span className="truncate font-medium">{video.name}</span>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[9px] text-on-surface-variant/70">时间: {video.time}</span>
-                                <span className="text-[9px] text-primary/70 bg-primary/5 px-1 py-0.2 rounded font-medium">
-                                  来源: {getSourceLabel(video)}
+                        {log.playedVideos.map((video, vIdx) => {
+                          const isSelected = contextMenu && contextMenu.dateStr === log.dateStr && contextMenu.videoPath === video.path;
+                          return (
+                            <div 
+                              key={vIdx} 
+                              onContextMenu={(e) => handleContextMenu(e, log.dateStr, video.path)}
+                              className={`text-xs flex items-center justify-between pl-2 border-l-2 py-1.5 transition-all duration-200 cursor-default rounded group ${
+                                isSelected 
+                                  ? 'bg-primary/10 border-primary text-primary font-semibold translate-x-1 shadow-xs' 
+                                  : 'text-on-surface-variant border-transparent hover:border-primary/60 hover:bg-primary/5 hover:text-on-surface hover:translate-x-1 hover:shadow-xs'
+                              }`}
+                              title="右键可删除该记录"
+                            >
+                              <div className="flex flex-col min-w-0 pr-4">
+                                <span className={`truncate font-medium transition-colors duration-200 ${
+                                  isSelected ? 'text-primary' : 'text-on-surface group-hover:text-primary'
+                                }`}>
+                                  {video.name}
                                 </span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[9px] opacity-70">时间: {video.time}</span>
+                                  <span className="text-[9px] text-primary/70 bg-primary/5 px-1 py-0.2 rounded font-medium">
+                                    来源: {getSourceLabel(video)}
+                                  </span>
+                                </div>
                               </div>
+                              <span className="font-bold text-primary whitespace-nowrap bg-primary/5 px-1.5 py-0.5 rounded">
+                                +{formatValue(video.duration)} {getUnitLabel()}
+                              </span>
                             </div>
-                            <span className="font-bold text-primary whitespace-nowrap bg-primary/5 px-1.5 py-0.5 rounded">
-                              +{formatValue(video.duration)} {getUnitLabel()}
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
