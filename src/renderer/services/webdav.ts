@@ -3,6 +3,7 @@ export interface WebDAVFile {
   path: string; // 相对/绝对 URL 路径
   isDir: boolean;
   size?: number;
+  mtime?: number;
 }
 
 // 极其轻量的 WebDAV 协议客户端，不依赖第三方库，直接使用浏览器 fetch
@@ -128,6 +129,10 @@ export class WebDAVClient {
       const contentLengthNode = propNode.getElementsByTagNameNS('*', 'getcontentlength')[0];
       const size = contentLengthNode ? parseInt(contentLengthNode.textContent || '0', 10) : undefined;
 
+      // 获取修改日期
+      const lastModifiedNode = propNode.getElementsByTagNameNS('*', 'getlastmodified')[0];
+      const mtime = lastModifiedNode ? new Date(lastModifiedNode.textContent || '').getTime() : undefined;
+
       // 排除当前被浏览的目录自身 (href 路径与 baseUriPath 相同)
       const cleanHref = href.endsWith('/') ? href : `${href}/`;
       if (cleanHref === baseUriPath || href === baseUriPath) {
@@ -138,7 +143,8 @@ export class WebDAVClient {
         name,
         path: href,
         isDir,
-        size
+        size,
+        mtime
       });
     }
 

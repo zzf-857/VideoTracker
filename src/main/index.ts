@@ -113,6 +113,7 @@ interface FileNode {
   path: string;
   isDir: boolean;
   size?: number;
+  mtime?: number;
   children?: FileNode[];
 }
 
@@ -135,6 +136,7 @@ function scanDirectory(dirPath: string): FileNode[] {
             name: file,
             path: fullPath,
             isDir: true,
+            mtime: stat.mtimeMs,
             children
           });
         }
@@ -146,7 +148,8 @@ function scanDirectory(dirPath: string): FileNode[] {
             name: file,
             path: fullPath,
             isDir: false,
-            size: stat.size
+            size: stat.size,
+            mtime: stat.mtimeMs
           });
         }
       }

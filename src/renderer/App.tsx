@@ -9,6 +9,17 @@ import Analytics from './components/Analytics';
 
 import { storageService, AppDataStore, MediaSourceConfig, VideoProgress } from './services/storage';
 import { useTimer } from './hooks/useTimer';
+import { WebDAVClient } from './services/webdav';
+
+export interface TreeNode {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size?: number;
+  mtime?: number;
+  children?: TreeNode[];
+  isLoaded?: boolean;
+}
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
@@ -26,15 +37,140 @@ export default function App() {
   // 挂机弹窗显示
   const [isIdleAlertOpen, setIsIdleAlertOpen] = useState<boolean>(false);
 
-  // 加载数据
+  // 双侧边栏宽度与折叠状态
+  const [sidebarWidth, setSidebarWidth] = useState<number>(260);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+
+  const [rightSidebarWidth, setRightSidebarWidth] = useState<number>(320);
+  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState<boolean>(false);
+  const [isRightResizing, setIsRightResizing] = useState<boolean>(false);
+
+  // 文件树管理
+  const [sources, setSources] = useState<MediaSourceConfig[]>([]);
+  const [fileTree, setFileTree] = useState<TreeNode[]>([]);
+  const [isLoadingFileTree, setIsLoadingFileTree] = useState<boolean>(false);
+
+  const startResizing = (mouseDownEvent: React.MouseEvent) => {
+    mouseDownEvent.preventDefault();
+    setIsResizing(true);
+  };
+
+  const startRightResizing = (mouseDownEvent: React.MouseEvent) => {
+    mouseDownEvent.preventDefault();
+    setIsRightResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (mouseMoveEvent: MouseEvent) => {
+      if (isResizing) {
+        const newWidth = Math.max(80, Math.min(450, mouseMoveEvent.clientX));
+        setSidebarWidth(newWidth);
+      } else if (isRightResizing) {
+        const newWidth = Math.max(80, Math.min(500, window.innerWidth - mouseMoveEvent.clientX));
+        setRightSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setSidebarWidth(w => {
+        if (w < 150) {
+          setIsSidebarCollapsed(true);
+          return 260; // 恢复默认，备下次展开
+        }
+        return w;
+      });
+      setRightSidebarWidth(w => {
+        if (w < 200) {
+          setIsRightSidebarCollapsed(true);
+          return 320; // 恢复默认
+        }
+        return w;
+      });
+      setIsResizing(false);
+      setIsRightResizing(false);
+    };
+
+    if (isResizing || isRightResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, isRightResizing]);
+
+  // 加载数据源
   useEffect(() => {
     storageService.loadData().then(data => {
       setAppData(data);
-      if (data.sources.length > 0 && !currentSource) {
-        setCurrentSource(data.sources[0]);
+      setSources(data.sources);
+      if (data.sources.length > 0) {
+        const exists = data.sources.some(s => s.id === currentSource?.id);
+        if (!currentSource || !exists) {
+          setCurrentSource(data.sources[0]);
+        }
+      } else {
+        setCurrentSource(null);
       }
     });
   }, [refreshSignal]);
+
+  // 加载当前源下的首层文件树
+  useEffect(() => {
+    if (!currentSource) {
+      setFileTree([]);
+      return;
+    }
+
+    setIsLoadingFileTree(true);
+
+    if (currentSource.type === 'local') {
+      if ('electronAPI' in window) {
+        (window as any).electronAPI.scanFolder(currentSource.path)
+          .then((tree: TreeNode[]) => {
+            setFileTree(tree);
+            setIsLoadingFileTree(false);
+          })
+          .catch((err: any) => {
+            console.error(err);
+            setFileTree([]);
+            setIsLoadingFileTree(false);
+          });
+      } else {
+        setFileTree([]);
+        setIsLoadingFileTree(false);
+      }
+    } else {
+      const client = new WebDAVClient(
+        currentSource.settings?.url || '',
+        currentSource.settings?.username,
+        currentSource.settings?.password
+      );
+      
+      client.readDir()
+        .then((files: any[]) => {
+          const tree: TreeNode[] = files.map(f => ({
+            name: f.name,
+            path: f.path,
+            isDir: f.isDir,
+            size: f.size,
+            mtime: f.mtime,
+            children: f.isDir ? [] : undefined,
+            isLoaded: false
+          }));
+          setFileTree(tree);
+          setIsLoadingFileTree(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setFileTree([]);
+          setIsLoadingFileTree(false);
+        });
+    }
+  }, [currentSource]);
 
   const handleRefresh = () => {
     setRefreshSignal(prev => prev + 1);
@@ -88,33 +224,39 @@ export default function App() {
   const getSourceStats = () => {
     if (!appData || !currentSource) return { totalCount: 0, finishedCount: 0, totalDuration: 0 };
 
-    let totalCount = 0;
+    const getFlatVideos = (nodes: TreeNode[]): TreeNode[] => {
+      let res: TreeNode[] = [];
+      for (const n of nodes) {
+        if (n.isDir) {
+          if (n.children) {
+            res = res.concat(getFlatVideos(n.children));
+          }
+        } else {
+          res.push(n);
+        }
+      }
+      return res;
+    };
+
+    const flatVideos = getFlatVideos(fileTree);
+    const totalCount = flatVideos.length;
     let finishedCount = 0;
     let totalDuration = 0;
 
-    // 扫描所有进度记录，找出以当前 source.path 开头（或 WebDAV 下匹配）的视频记录
-    const basePath = currentSource.path;
-    
-    for (const [vPath, prog] of Object.entries(appData.progress)) {
-      if (vPath.startsWith(basePath) || vPath.includes(basePath)) {
-        totalCount++;
+    for (const video of flatVideos) {
+      const prog = appData.progress[video.path];
+      if (prog) {
         if (prog.isFinished) {
           finishedCount++;
         }
-        // 如果播放过有 duration，则累加
         if (prog.duration > 0) {
           totalDuration += prog.duration;
         } else {
-          // 未播放过的视频，估算为 30 分钟 (1800 秒)
-          totalDuration += 1800;
+          totalDuration += 1800; // 未播视频估算 30 分钟
         }
+      } else {
+        totalDuration += 1800; // 未播视频估算 30 分钟
       }
-    }
-
-    // 若 progress 还没记录，提供最基本的视频统计（如果是本地，读取叶子节点数量，这在 Sidebar 加载后可通过树状节点获得。为了简单，直接读 progress 大小或提供基础显示）
-    if (totalCount === 0) {
-      // 降级使用基础数值
-      return { totalCount: 10, finishedCount: 0, totalDuration: 10 * 1800 };
     }
 
     return { totalCount, finishedCount, totalDuration };
@@ -124,22 +266,65 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#F5F5F7]">
-      {/* 侧边栏 */}
-      <Sidebar
-        currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
-        activeVideoPath={activeVideoPath}
-        onSelectVideo={handleSelectVideo}
-        progressMap={appData?.progress || {}}
-        refreshSignal={refreshSignal}
-      />
+      {/* 左侧侧边栏 */}
+      <div 
+        className="h-full relative flex-shrink-0 overflow-hidden z-30"
+        style={{ 
+          width: isSidebarCollapsed ? 0 : sidebarWidth,
+          transition: isResizing ? 'none' : 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+      >
+        <Sidebar
+          currentTab={currentTab}
+          setCurrentTab={setCurrentTab}
+          activeVideoPath={activeVideoPath}
+          onSelectVideo={handleSelectVideo}
+          progressMap={appData?.progress || {}}
+          refreshSignal={refreshSignal}
+          onCollapse={() => setIsSidebarCollapsed(true)}
+          
+          sources={sources}
+          currentSource={currentSource}
+          setCurrentSource={setCurrentSource}
+          fileTree={fileTree}
+          setFileTree={setFileTree}
+          isLoading={isLoadingFileTree}
+        />
+      </div>
+
+      {/* 左侧拉伸手柄与一键折叠按钮 */}
+      <div className="relative flex-shrink-0 z-40">
+        <div
+          onMouseDown={startResizing}
+          className={`w-[4px] absolute top-0 bottom-0 cursor-col-resize transition-colors ${
+            isSidebarCollapsed ? 'pointer-events-none' : ''
+          } ${
+            isResizing ? 'bg-primary' : 'bg-transparent hover:bg-primary/30'
+          }`}
+          style={{
+            left: isSidebarCollapsed ? 0 : -2,
+          }}
+        />
+        <button
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white border border-black/10 flex items-center justify-center shadow-md hover:bg-primary hover:text-white active:scale-95 transition-all text-on-surface-variant cursor-pointer z-50 group"
+          style={{
+            left: isSidebarCollapsed ? 12 : 0,
+          }}
+          title={isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
+        >
+          <span className="material-symbols-outlined text-[16px] group-hover:scale-110 transition-transform">
+            {isSidebarCollapsed ? 'chevron_right' : 'chevron_left'}
+          </span>
+        </button>
+      </div>
 
       {/* 右侧主工作区域 */}
       <main className="flex-1 flex flex-col relative h-full overflow-hidden">
         {currentTab === 'dashboard' && (
-          <div className="flex-1 p-8 grid grid-cols-12 gap-6 relative z-10 h-full overflow-hidden">
-            {/* 中间：播放器区域 (占 8 列) */}
-            <section className="col-span-8 flex flex-col gap-5 h-full overflow-hidden">
+          <div className="flex-1 p-8 flex gap-6 relative z-10 h-full overflow-hidden">
+            {/* 中间主要播放与 Dashboard 区域 */}
+            <section className="flex-1 flex flex-col gap-5 h-full overflow-hidden">
               <div className="flex-1 min-h-[300px] relative bg-black rounded-2xl overflow-hidden shadow-lg border border-black/5">
                 {activeVideoUrl ? (
                   <Player
@@ -181,10 +366,44 @@ export default function App() {
               />
             </section>
 
-            {/* 右侧：日历热力图与自动日志时间轴 (占 4 列) */}
-            <section className="col-span-4 h-full overflow-hidden">
+            {/* 右侧：日历热力图与自动日志时间轴 (可拉伸/折叠) */}
+            <div 
+              className="h-full relative flex-shrink-0 overflow-hidden"
+              style={{ 
+                width: isRightSidebarCollapsed ? 0 : rightSidebarWidth,
+                transition: isRightResizing ? 'none' : 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
+            >
               <LogCalendar refreshSignal={refreshSignal} />
-            </section>
+            </div>
+
+            {/* 右侧拉伸手柄与一键折叠按钮 */}
+            <div className="relative flex-shrink-0 z-40">
+              <div
+                onMouseDown={startRightResizing}
+                className={`w-[4px] absolute top-0 bottom-0 cursor-col-resize transition-colors ${
+                  isRightSidebarCollapsed ? 'pointer-events-none' : ''
+                } ${
+                  isRightResizing ? 'bg-primary' : 'bg-transparent hover:bg-primary/30'
+                }`}
+                style={{
+                  right: isRightSidebarCollapsed ? 0 : rightSidebarWidth - 2,
+                }}
+              />
+              <button
+                onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+                className="absolute top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full bg-white border border-black/10 flex items-center justify-center shadow-md hover:bg-primary hover:text-white active:scale-95 transition-all text-on-surface-variant cursor-pointer z-50 group"
+                style={{
+                  right: isRightSidebarCollapsed ? 12 : rightSidebarWidth - 12,
+                  transition: isRightResizing ? 'none' : 'right 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                }}
+                title={isRightSidebarCollapsed ? "展开日历" : "收起日历"}
+              >
+                <span className="material-symbols-outlined text-[16px] group-hover:scale-110 transition-transform">
+                  {isRightSidebarCollapsed ? 'chevron_left' : 'chevron_right'}
+                </span>
+              </button>
+            </div>
           </div>
         )}
 
