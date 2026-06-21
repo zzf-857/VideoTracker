@@ -23,6 +23,24 @@ export class WebDAVClient {
     }
   }
 
+  // 封装统一的 HTTP 请求方法，优先使用 Electron 预加载的代理，以绕过浏览器的 CORS 限制
+  private async request(url: string, options: any): Promise<{ status: number; text: () => Promise<string>; ok: boolean; statusText: string }> {
+    if (typeof window !== 'undefined' && 'electronAPI' in window && (window as any).electronAPI.webdavRequest) {
+      const res = await (window as any).electronAPI.webdavRequest(url, options);
+      if (res.error) {
+        throw new Error(res.error);
+      }
+      return {
+        status: res.status,
+        statusText: res.statusText,
+        ok: res.status >= 200 && res.status < 300,
+        text: async () => res.text
+      };
+    } else {
+      return fetch(url, options);
+    }
+  }
+
   // 获取请求头部
   private getHeaders(extraHeaders: Record<string, string> = {}) {
     const headers: Record<string, string> = { ...extraHeaders };
@@ -35,7 +53,11 @@ export class WebDAVClient {
   // 1. 测试连接是否成功
   async testConnection(): Promise<boolean> {
     try {
-      const response = await fetch(this.url, {
+      let targetUrl = this.url;
+      if (!targetUrl.endsWith('/')) {
+        targetUrl += '/';
+      }
+      const response = await this.request(targetUrl, {
         method: 'PROPFIND',
         headers: this.getHeaders({
           'Depth': '0',
@@ -76,10 +98,13 @@ export class WebDAVClient {
 
   // 2. 浏览指定路径下的目录结构 (Depth: 1)
   async readDir(subPath: string = ''): Promise<WebDAVFile[]> {
-    const targetUrl = this.resolveUrl(subPath);
+    let targetUrl = this.resolveUrl(subPath);
+    if (!targetUrl.endsWith('/')) {
+      targetUrl += '/';
+    }
 
     try {
-      const response = await fetch(targetUrl, {
+      const response = await this.request(targetUrl, {
         method: 'PROPFIND',
         headers: this.getHeaders({
           'Depth': '1',
@@ -193,7 +218,7 @@ export class WebDAVClient {
   async uploadFile(fileName: string, content: string): Promise<boolean> {
     try {
       // 1. 尝试以 PUT 请求创建或覆盖文件
-      const response = await fetch(`${this.url}/${fileName}`, {
+      const response = await this.request(`${this.url}/${fileName}`, {
         method: 'PUT',
         headers: this.getHeaders({
           'Content-Type': 'application/json; charset=utf-8'
@@ -210,12 +235,12 @@ export class WebDAVClient {
   // 5. 从 WebDAV 空间下载本地 JSON 配置文件
   async downloadFile(fileName: string): Promise<string | null> {
     try {
-      const response = await fetch(`${this.url}/${fileName}`, {
+      const response = await this.request(`${this.url}/${fileName}`, {
         method: 'GET',
         headers: this.getHeaders()
       });
       if (response.status === 200) {
-        return await response.text();
+        return response.text();
       }
       return null;
     } catch (err) {

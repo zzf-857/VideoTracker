@@ -66,7 +66,7 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
       setBreadcrumbs(crumbs);
     } catch (err) {
       console.error('Failed to load folder:', err);
-      alert('无法读取该目录');
+      alert('无法读取该目录: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setBrowserLoading(false);
     }
@@ -79,6 +79,10 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
 
   const handleBreadcrumbClick = (crumbPath: string) => {
     loadWebDAVFolder(crumbPath);
+  };
+
+  const handleSelectCurrentDir = () => {
+    setSelectedPath(currentBrowsePath);
   };
 
   // 选择本地文件夹 (Electron 专享 API)
@@ -377,6 +381,12 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
                       />
                     </div>
                   </div>
+
+                  {newSourceType === 'alist' && (
+                    <div className="text-[10px] text-orange-400 bg-orange-400/10 p-2.5 rounded-xl border border-orange-400/20 leading-relaxed">
+                      ⚠️ <strong>安全提示：</strong>建议在 AList 管理面板中为本应用单独创建一个<strong>只读（Read-Only）</strong>且限制访问目录的子账号，避免在应用中直接使用主管理员账号（admin）。
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-3 pt-2">
                     <button

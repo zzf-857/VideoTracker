@@ -19,4 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 唤起并聚焦主窗口
   focusMainWindow: () => ipcRenderer.invoke('window:focus'),
+
+  // 代理 WebDAV 网络请求，避免跨域限制
+  webdavRequest: (url: string, options: any) => ipcRenderer.invoke('webdav:request', url, options),
 });

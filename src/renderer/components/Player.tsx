@@ -41,6 +41,7 @@ export default function Player({
     const art = new Artplayer({
       container: artRef.current,
       url: videoUrl,
+      // @ts-ignore
       title: videoName,
       volume: 0.5,
       isLive: false,

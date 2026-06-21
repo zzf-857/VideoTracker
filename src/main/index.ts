@@ -14,6 +14,76 @@ const getDataFilePath = (key: string) => {
   return path.join(userDataPath, `${key}.json`);
 };
 
+// 辅助函数：代理流式 HTTP 请求并自动跟踪 301/302 重定向（避开 Referer 和 CORS 限制）
+function makeProxyRequest(
+  targetUrlStr: string,
+  clientReqHeaders: http.IncomingHttpHeaders,
+  res: http.ServerResponse,
+  activeRequestRef: { current: any },
+  redirectCount = 0
+) {
+  if (redirectCount > 5) {
+    res.writeHead(502);
+    res.end('Too many redirects');
+    return;
+  }
+
+  try {
+    const targetUrl = new URL(targetUrlStr);
+    const headers: Record<string, string> = {};
+
+    if (clientReqHeaders.range) {
+      headers['Range'] = clientReqHeaders.range;
+    }
+
+    if (targetUrl.username || targetUrl.password) {
+      const username = decodeURIComponent(targetUrl.username);
+      const password = decodeURIComponent(targetUrl.password);
+      const creds = Buffer.from(`${username}:${password}`).toString('base64');
+      headers['Authorization'] = `Basic ${creds}`;
+      targetUrl.username = '';
+      targetUrl.password = '';
+    }
+
+    const protocol = targetUrl.protocol === 'https:' ? require('https') : require('http');
+    
+    const proxyReq = protocol.request(targetUrl.toString(), {
+      method: 'GET',
+      headers: headers
+    }, (proxyRes: any) => {
+      const statusCode = proxyRes.statusCode;
+      
+      // 检测到重定向 (301, 302, 307, 308) 则在主进程中递归追踪，并自动剥离 Referer
+      if ([301, 302, 307, 308].includes(statusCode) && proxyRes.headers.location) {
+        const nextUrl = new URL(proxyRes.headers.location, targetUrl.toString()).toString();
+        makeProxyRequest(nextUrl, clientReqHeaders, res, activeRequestRef, redirectCount + 1);
+        return;
+      }
+
+      // 将最终响应的状态码及头部透传给渲染进程，并建立数据通道管道
+      res.writeHead(statusCode, proxyRes.headers);
+      proxyRes.pipe(res);
+    });
+
+    proxyReq.on('error', (err: any) => {
+      console.error('Proxy stream request error:', err);
+      if (!res.headersSent) {
+        res.writeHead(500);
+        res.end(err.message || 'Proxy error');
+      }
+    });
+
+    activeRequestRef.current = proxyReq;
+    proxyReq.end();
+  } catch (err: any) {
+    console.error('Failed to parse target URL:', err);
+    if (!res.headersSent) {
+      res.writeHead(400);
+      res.end('Invalid target URL');
+    }
+  }
+}
+
 // 1. 启动轻量级 HTTP Range 本地视频流转接服务器
 function startStreamServer() {
   streamServer = http.createServer((req, res) => {
@@ -39,45 +109,20 @@ function startStreamServer() {
 
       const cleanBase64 = filePathQuery.replace(/ /g, '+');
       const decodedPath = Buffer.from(cleanBase64, 'base64').toString('utf-8');
+      console.log(`[Stream Server] Request URL: ${req.url}`);
+      console.log(`[Stream Server] Decoded path: ${decodedPath}`);
+      console.log(`[Stream Server] File exists: ${fs.existsSync(decodedPath)}`);
       
       if (decodedPath.startsWith('http://') || decodedPath.startsWith('https://')) {
-        const remoteUrl = new URL(decodedPath);
-        const headers: Record<string, string> = {};
+        const activeRequestRef = { current: null as any };
         
-        if (req.headers.range) {
-          headers['Range'] = req.headers.range;
-        }
-        
-        if (remoteUrl.username || remoteUrl.password) {
-          const username = decodeURIComponent(remoteUrl.username);
-          const password = decodeURIComponent(remoteUrl.password);
-          const creds = Buffer.from(`${username}:${password}`).toString('base64');
-          headers['Authorization'] = `Basic ${creds}`;
-          
-          remoteUrl.username = '';
-          remoteUrl.password = '';
-        }
-
-        const protocol = remoteUrl.protocol === 'https:' ? require('https') : require('http');
-        const proxyReq = protocol.request(remoteUrl.toString(), {
-          method: 'GET',
-          headers: headers
-        }, (proxyRes: any) => {
-          res.writeHead(proxyRes.statusCode, proxyRes.headers);
-          proxyRes.pipe(res);
-        });
-
-        proxyReq.on('error', (err: any) => {
-          console.error('WebDAV stream proxy error:', err);
-          res.writeHead(500);
-          res.end(err.message || 'WebDAV proxy error');
-        });
-
         req.on('close', () => {
-          proxyReq.destroy();
+          if (activeRequestRef.current) {
+            activeRequestRef.current.destroy();
+          }
         });
 
-        req.pipe(proxyReq);
+        makeProxyRequest(decodedPath, req.headers, res, activeRequestRef);
         return;
       }
       
@@ -208,16 +253,17 @@ function scanDirectory(dirPath: string): FileNode[] {
 
 // 3. 创建应用窗口
 function createWindow() {
+  const preloadPath = path.join(__dirname, 'preload.js');
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     titleBarStyle: 'default', // 标准窗口控制栏，贴合原生质感
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
       backgroundThrottling: false, // 禁用后台限频，确保窗口在失焦/后台时定时器依然精准无阻地走字
-      webSecurity: false, // 禁用跨域安全限制，允许直接跨域连接 WebDAV 网盘
     },
   });
 
@@ -234,6 +280,11 @@ function createWindow() {
           mainWindow.loadURL('http://127.0.0.1:5173');
         }
       }, 1000);
+    });
+
+    // 转发渲染进程的控制台日志
+    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      console.log(`[Renderer Console] ${message} (at ${sourceId}:${line})`);
     });
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
@@ -311,6 +362,23 @@ app.whenReady().then(() => {
     // 对路径进行 base64 编码，防止中文或特殊字符在 URL 传参时解析出错
     const base64Path = Buffer.from(absolutePath).toString('base64');
     return `http://127.0.0.1:${streamPort}/video?path=${encodeURIComponent(base64Path)}`;
+  });
+
+  // 代理 WebDAV 网络请求，以避开渲染进程的 CORS 限制
+  ipcMain.handle('webdav:request', async (_event, url: string, options: any) => {
+    try {
+      const response = await fetch(url, options);
+      const status = response.status;
+      const statusText = response.statusText;
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+      const text = await response.text();
+      return { status, statusText, headers, text };
+    } catch (err: any) {
+      return { error: err.message };
+    }
   });
 
   // 唤起并聚焦主窗口
