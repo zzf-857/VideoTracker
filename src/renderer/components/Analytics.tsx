@@ -189,12 +189,12 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
   };
   const rangeStats = getRangeStats(daysRange);
 
-  // 年度热力图固定正方形格子尺寸配置
+  // 年度热力图固定 53 列等分正方形格子配置
   const heatmapConfig = {
-    cellClass: 'w-3 h-3 rounded-sm',
+    cellClass: 'w-full aspect-square rounded-[3px]',
+    colStyle: { flex: '1 1 0%', minWidth: '8px', maxWidth: '24px' },
     gapClass: 'gap-1',
-    containerGapClass: 'gap-1',
-    cellWidth: '12px'
+    containerGapClass: 'gap-1'
   };
 
   // 整理所有历史日志时间轴数据
@@ -331,16 +331,20 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
           </div>
 
           <div className="flex flex-col gap-1.5 overflow-x-auto pb-2 custom-scrollbar">
-            {/* 网格区：宽度 w-fit 保持经典紧凑对齐，且带有时光聚光灯高亮动效 */}
-            <div className={`flex ${heatmapConfig.containerGapClass} w-fit pb-1`}>
+            {/* 网格区：宽度 w-full 保持铺满，每一列 flex-1 撑满，格子 w-full 自适应正方形大小，且带有时光聚光灯高亮动效 */}
+            <div className={`flex ${heatmapConfig.containerGapClass} w-full min-w-[640px] pb-1`}>
               {columns.map((column, colIdx) => (
-                <div key={colIdx} className={`flex flex-col ${heatmapConfig.gapClass}`}>
+                <div 
+                  key={colIdx} 
+                  style={heatmapConfig.colStyle}
+                  className={`flex flex-col ${heatmapConfig.gapClass}`}
+                >
                   {column.map((cell, cellIdx) => (
                     <div
                       key={cellIdx}
                       className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-300 ${
                         cell.daysAgo >= daysRange 
-                          ? 'opacity-15 pointer-events-none scale-[0.95] saturate-50' 
+                          ? 'opacity-[0.04] pointer-events-none scale-[0.9] saturate-0' 
                           : 'opacity-100'
                       }`}
                       title={cell.dateStr && cell.daysAgo < daysRange ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
@@ -350,14 +354,14 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
               ))}
             </div>
             
-            {/* 动态月份底部标识：列同步紧凑排布，超出激活天数段的月份设为半透明 */}
-            <div className={`flex ${heatmapConfig.containerGapClass} mt-2 select-none w-fit`}>
+            {/* 动态月份底部标识：列宽度与上方完全镜像等宽对齐，超出激活天数段的月份设为半透明 */}
+            <div className={`flex ${heatmapConfig.containerGapClass} w-full min-w-[640px] mt-2 select-none`}>
               {monthLabels.map((item, idx) => (
                 <div
                   key={idx}
-                  style={{ width: heatmapConfig.cellWidth }}
+                  style={heatmapConfig.colStyle}
                   className={`text-[9px] font-bold text-on-surface-variant text-left overflow-visible whitespace-nowrap transition-opacity duration-300 ${
-                    item.isDim ? 'opacity-20' : 'opacity-80'
+                    item.isDim ? 'opacity-15' : 'opacity-85'
                   }`}
                 >
                   {item.label}
