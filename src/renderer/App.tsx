@@ -302,13 +302,13 @@ export default function App() {
       >
         <div
           onMouseDown={startResizing}
-          className={`w-[8px] absolute top-0 bottom-0 cursor-col-resize transition-colors ${
+          className={`w-[8px] absolute top-0 bottom-0 cursor-col-resize -translate-x-1/2 transition-colors ${
             isSidebarCollapsed ? 'pointer-events-none' : ''
           } ${
             isResizing ? 'bg-primary' : 'bg-transparent hover:bg-primary/20'
           }`}
           style={{
-            left: isSidebarCollapsed ? 0 : -4,
+            left: 0,
           }}
         />
         <button
@@ -327,110 +327,55 @@ export default function App() {
         </button>
       </div>
 
-      {/* 右侧主工作区域 */}
+      {/* 中间主要播放与 Dashboard 区域 */}
       <main className="flex-1 flex flex-col relative h-full overflow-hidden">
-        {currentTab === 'dashboard' && (
-          <div className="flex-1 p-8 flex gap-6 relative z-10 h-full overflow-hidden">
-            {/* 中间主要播放与 Dashboard 区域 */}
-            <section className="flex-1 flex flex-col gap-5 h-full overflow-hidden">
-              <div className="flex-1 min-h-[300px] relative bg-black rounded-2xl overflow-hidden shadow-lg border border-black/5">
-                {activeVideoUrl ? (
-                  <Player
-                    videoUrl={activeVideoUrl}
-                    videoPath={activeVideoPath}
-                    videoName={activeVideoName}
-                    onPlayStateChange={handlePlayStateChange}
-                    onTimeUpdate={handleTimeUpdate}
-                    onEnded={handleRefresh}
-                  />
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-[#1e1b4b]/20 to-[#0b0b0f]/10">
-                    <span className="material-symbols-outlined text-5xl text-primary/40 mb-3 animate-bounce">play_circle</span>
-                    <h3 className="text-base font-bold text-on-surface">开启高效学习之旅</h3>
-                    <p className="text-xs text-on-surface-variant mt-1.5 max-w-[280px]">
-                      请在左侧侧边栏中选择一个挂载源，并双击具体的课程视频开始播放
-                    </p>
-                  </div>
-                )}
+        {currentTab === 'dashboard' ? (
+          <div className="flex-1 p-8 flex flex-col gap-5 h-full overflow-hidden">
+            <div className="flex-1 min-h-[300px] relative bg-black rounded-2xl overflow-hidden shadow-lg border border-black/5">
+              {activeVideoUrl ? (
+                <Player
+                  videoUrl={activeVideoUrl}
+                  videoPath={activeVideoPath}
+                  videoName={activeVideoName}
+                  onPlayStateChange={handlePlayStateChange}
+                  onTimeUpdate={handleTimeUpdate}
+                  onEnded={handleRefresh}
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-[#1e1b4b]/20 to-[#0b0b0f]/10">
+                  <span className="material-symbols-outlined text-5xl text-primary/40 mb-3 animate-bounce">play_circle</span>
+                  <h3 className="text-base font-bold text-on-surface">开启高效学习之旅</h3>
+                  <p className="text-xs text-on-surface-variant mt-1.5 max-w-[280px]">
+                    请在左侧侧边栏中选择一个挂载源，并双击具体的课程视频开始播放
+                  </p>
+                </div>
+              )}
 
-                {/* 自动计时状态显示悬浮条 */}
-                {isPlaying && (
-                  <div className="absolute top-4 right-4 bg-white/80 backdrop-blur-md border border-black/5 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-md">
-                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-[10px] font-bold text-on-surface">
-                      本日计时: {Math.floor(sessionSeconds / 60)} 分 {sessionSeconds % 60} 秒
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* 底部计划计算面板 */}
-              <Dashboard
-                currentSource={currentSource}
-                videoCount={stats.totalCount}
-                playedVideoCount={stats.finishedCount}
-                totalLocalDuration={stats.totalDuration}
-                refreshSignal={refreshSignal}
-              />
-            </section>
-
-            {/* 右侧：日历热力图与自动日志时间轴 (可拉伸/折叠 - 自带毛玻璃对称背板) */}
-            <div 
-              className="h-full relative flex-shrink-0 overflow-hidden bg-white/80 backdrop-blur-xl border-l border-black/5"
-              style={{ 
-                width: isRightSidebarCollapsed ? 0 : rightSidebarWidth,
-                transition: isRightResizing ? 'none' : 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-            >
-              <div className="p-6 h-full overflow-y-auto custom-scrollbar">
-                <LogCalendar refreshSignal={refreshSignal} />
-              </div>
+              {/* 自动计时状态显示悬浮条 */}
+              {isPlaying && (
+                <div className="absolute top-4 right-4 bg-white/80 backdrop-blur-md border border-black/5 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-md">
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  <span className="text-[10px] font-bold text-on-surface">
+                    本日计时: {Math.floor(sessionSeconds / 60)} 分 {sessionSeconds % 60} 秒
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* 右侧拉伸手柄与一键折叠按钮 */}
-            <div 
-              className="relative flex-shrink-0 z-40"
-              onMouseEnter={() => setRightHover(true)}
-              onMouseLeave={() => setRightHover(false)}
-            >
-              <div
-                onMouseDown={startRightResizing}
-                className={`w-[8px] absolute top-0 bottom-0 cursor-col-resize transition-colors ${
-                  isRightSidebarCollapsed ? 'pointer-events-none' : ''
-                } ${
-                  isRightResizing ? 'bg-primary' : 'bg-transparent hover:bg-primary/20'
-                }`}
-                style={{
-                  right: isRightSidebarCollapsed ? 0 : rightSidebarWidth - 4,
-                }}
-              />
-              <button
-                onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
-                className={`absolute top-1/2 -translate-y-1/2 translate-x-1/2 w-4 h-12 rounded-full bg-white/95 backdrop-blur-md border border-black/10 flex items-center justify-center shadow-md text-on-surface-variant cursor-pointer z-50 transition-all duration-200 ${
-                  isRightSidebarCollapsed || rightHover || isRightResizing ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
-                } hover:bg-primary hover:text-white hover:border-primary active:scale-90`}
-                style={{
-                  right: isRightSidebarCollapsed ? 6 : rightSidebarWidth - 6,
-                }}
-                title={isRightSidebarCollapsed ? "展开日历" : "收起日历"}
-              >
-                <span className="material-symbols-outlined text-[12px] font-bold">
-                  {isRightSidebarCollapsed ? 'chevron_left' : 'chevron_right'}
-                </span>
-              </button>
-            </div>
+            {/* 底部计划计算面板 */}
+            <Dashboard
+              currentSource={currentSource}
+              videoCount={stats.totalCount}
+              playedVideoCount={stats.finishedCount}
+              totalLocalDuration={stats.totalDuration}
+              refreshSignal={refreshSignal}
+            />
           </div>
-        )}
-
-        {currentTab === 'sources' && (
+        ) : currentTab === 'sources' ? (
           <SourceManager refreshSignal={refreshSignal} onRefresh={handleRefresh} />
-        )}
-
-        {currentTab === 'analytics' && (
+        ) : currentTab === 'analytics' ? (
           <Analytics refreshSignal={refreshSignal} />
-        )}
-
-        {currentTab === 'settings' && (
+        ) : (
           <Settings refreshSignal={refreshSignal} onRefresh={handleRefresh} />
         )}
 
@@ -455,6 +400,56 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* 右侧拉伸手柄与一键折叠按钮 (仅在 dashboard 下与三栏并列) */}
+      {currentTab === 'dashboard' && (
+        <div 
+          className="relative flex-shrink-0 z-40"
+          onMouseEnter={() => setRightHover(true)}
+          onMouseLeave={() => setRightHover(false)}
+        >
+          <div
+            onMouseDown={startRightResizing}
+            className={`w-[8px] absolute top-0 bottom-0 cursor-col-resize -translate-x-1/2 transition-colors ${
+              isRightSidebarCollapsed ? 'pointer-events-none' : ''
+            } ${
+              isRightResizing ? 'bg-primary' : 'bg-transparent hover:bg-primary/20'
+            }`}
+            style={{
+              left: 0,
+            }}
+          />
+          <button
+            onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-12 rounded-full bg-white/95 backdrop-blur-md border border-black/10 flex items-center justify-center shadow-md text-on-surface-variant cursor-pointer z-50 transition-all duration-200 ${
+              isRightSidebarCollapsed || rightHover || isRightResizing ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
+            } hover:bg-primary hover:text-white hover:border-primary active:scale-90`}
+            style={{
+              left: isRightSidebarCollapsed ? -6 : 0,
+            }}
+            title={isRightSidebarCollapsed ? "展开日历" : "收起日历"}
+          >
+            <span className="material-symbols-outlined text-[12px] font-bold">
+              {isRightSidebarCollapsed ? 'chevron_left' : 'chevron_right'}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* 右侧侧边栏 - 日历 (仅在 dashboard 下与三栏并列) */}
+      {currentTab === 'dashboard' && (
+        <div 
+          className="h-full relative flex-shrink-0 overflow-hidden bg-white/80 backdrop-blur-xl border-l border-black/5 z-30"
+          style={{ 
+            width: isRightSidebarCollapsed ? 0 : rightSidebarWidth,
+            transition: isRightResizing ? 'none' : 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+        >
+          <div className="p-6 h-full overflow-y-auto custom-scrollbar">
+            <LogCalendar refreshSignal={refreshSignal} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
