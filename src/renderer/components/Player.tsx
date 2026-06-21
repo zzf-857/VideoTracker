@@ -46,7 +46,7 @@ export default function Player({
       isLive: false,
       muted: false,
       autoplay: false,
-      pip: true,
+      pip: false, // 禁用原生受限画中画
       autoSize: false,
       autoMini: true,
       screenshot: false,
@@ -67,6 +67,25 @@ export default function Player({
       customType: {},
       plugins: [],
       hotkey: false, // 禁用 ArtPlayer 默认自带的快捷键，防止与自定义热键重复触发冲突
+      controls: [
+        {
+          name: 'pip-custom',
+          position: 'right',
+          html: '<span class="material-symbols-outlined" style="font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white;">picture_in_picture_alt</span>',
+          tooltip: '悬浮窗播放',
+          click: function () {
+            if ((window as any).electronAPI) {
+              (window as any).electronAPI.openPipWindow({
+                url: art.url,
+                path: videoPath,
+                name: videoName,
+                currentTime: art.currentTime
+              });
+              art.pause();
+            }
+          }
+        }
+      ],
     });
 
     playerInstanceRef.current = art;
@@ -211,6 +230,29 @@ export default function Player({
       window.removeEventListener('player:pause-signal', handlePauseSignal);
     };
   }, []);
+
+  // 监听画中画关闭信号，同步最新播放进度
+  useEffect(() => {
+    if (!(window as any).electronAPI) return;
+
+    const unsubscribe = (window as any).electronAPI.onPipClosed(async (event: any, data: { videoPath: string }) => {
+      const art = playerInstanceRef.current;
+      if (!art) return;
+
+      // 如果关闭的浮窗视频正是当前播放的视频，则同步进度
+      if (data.videoPath === videoPath) {
+        const freshData = await storageService.loadData();
+        const record = freshData.progress[videoPath];
+        if (record && record.currentTime > 0) {
+          art.currentTime = record.currentTime;
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [videoPath]);
 
   return (
     <div className="w-full h-full rounded-2xl overflow-hidden shadow-lg border border-black/5 bg-[#000000]">

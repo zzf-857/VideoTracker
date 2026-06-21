@@ -78,3 +78,7 @@
 *   **feat: 播放器暂停美化、全局倍速状态提升与快捷键绑定、设置页录制及重置、下拉框遮挡优化** (ff5714b)
     *   **时间**: 2026-06-21
     *   **描述**: 1. index.css 覆盖大播放图标，增加蓝色发光投影以提升在白底PPT中的辨识度；2. 倍速状态提升至 App，共享至 Player 与 Dashboard 仪表盘并动态向下拉框注入当前倍速，实现快捷键（F全屏、C加速、X减速、Z重置倍速）后的双向强联动；3. Settings 录制修改为全局捕获事件并拦截所有系统按键行为，优化录制 UI 态和 Esc 取消逻辑，一键重置全量参数；4. CustomSelect 支持 fullWidth，左侧挂载源下拉菜单截断防止溢出裁剪，重整列表与下拉框 z-index 层叠避免遮挡。
+
+*   **feat: 支持自定义置顶悬浮播放器小窗口，解决非激活态挂机不计时，支持取消置顶与退出唤醒聚焦** (c81b14b)
+    *   **时间**: 2026-06-21
+    *   **描述**: 1. preload.ts 暴露置顶与小窗控制方法；2. index.ts 注册 pip 独立无边框 BrowserWindow 并通过 query 串无感传参，监听 window.closed 自动 mainWindow.show/focus 唤醒聚焦；3. 编写 PipPlayer.tsx 独立页面在置顶小窗下播放，将 idleTimeoutMinutes 设大以实际上免除挂机检测，支持拖拽、开启/取消置顶按钮与进度存储；4. App.tsx 根据 ?mode=pip 分流加载浮窗，Player.tsx 自定义 PiP 控制图标，并在 window.closed 时自动同步最新播放时间点。
