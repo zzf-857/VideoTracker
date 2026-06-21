@@ -12,6 +12,7 @@ interface CustomSelectProps {
   className?: string;
   variant?: 'card' | 'flat';
   dropdownAlign?: 'left' | 'right';
+  fullWidth?: boolean;
 }
 
 export default function CustomSelect({
@@ -20,7 +21,8 @@ export default function CustomSelect({
   options,
   className = '',
   variant = 'card',
-  dropdownAlign = 'left'
+  dropdownAlign = 'left',
+  fullWidth = false
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -70,7 +72,7 @@ export default function CustomSelect({
         <div
           className={`absolute z-[250] mt-1.5 py-1 rounded-xl bg-white/90 backdrop-blur-md border border-black/5 shadow-xl min-w-[130px] max-h-60 overflow-y-auto custom-scrollbar ${
             dropdownAlign === 'right' ? 'right-0' : 'left-0'
-          }`}
+          } ${fullWidth ? 'w-full left-0 right-0' : ''}`}
         >
           {options.map((opt) => {
             const isSelected = opt.value === value;

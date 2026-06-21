@@ -24,6 +24,7 @@ export interface TreeNode {
 export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [appData, setAppData] = useState<AppDataStore | null>(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.25);
   const [currentSource, setCurrentSource] = useState<MediaSourceConfig | null>(null);
   
   // 当前播放视频信息
@@ -497,6 +498,8 @@ export default function App() {
               totalLocalDuration={stats.totalDuration}
               playedLocalDuration={stats.finishedDuration}
               refreshSignal={refreshSignal}
+              playbackSpeed={playbackSpeed}
+              onSpeedChange={setPlaybackSpeed}
             />
 
             {/* 主要播放与占位区域 */}
@@ -506,6 +509,14 @@ export default function App() {
                   videoUrl={activeVideoUrl}
                   videoPath={activeVideoPath}
                   videoName={activeVideoName}
+                  playbackSpeed={playbackSpeed}
+                  onSpeedChange={setPlaybackSpeed}
+                  hotkeys={appData?.settings.hotkeys || {
+                    fullscreen: 'f',
+                    speedUp: 'c',
+                    speedDown: 'x',
+                    speedReset: 'z'
+                  }}
                   onPlayStateChange={handlePlayStateChange}
                   onTimeUpdate={handleTimeUpdate}
                   onEnded={handleRefresh}

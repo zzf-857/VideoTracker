@@ -498,7 +498,7 @@ export default function Sidebar({
         {currentTab === 'dashboard' && (
           <div className="flex-1 flex flex-col overflow-hidden border-t border-black/5 mt-2">
             {/* 数据源选择器 */}
-            <div className="px-4 py-3 flex items-center justify-between bg-black/[0.01] border-b border-black/5">
+            <div className="px-4 py-3 flex items-center justify-between bg-black/[0.01] border-b border-black/5 relative z-30">
               <CustomSelect
                 value={currentSource ? currentSource.id : ''}
                 onChange={(val) => setCurrentSource(sources.find(s => s.id === val) || null)}
@@ -508,11 +508,12 @@ export default function Sidebar({
                 })) : [{ value: '', label: '暂无挂载源' }]}
                 className="w-full"
                 variant="card"
+                fullWidth={true}
               />
             </div>
 
             {/* PotPlayer 风格：平铺/树状及排序控制条 */}
-            <div className="px-4 py-2 flex items-center justify-between border-b border-black/5 bg-black/[0.01]">
+            <div className="px-4 py-2 flex items-center justify-between border-b border-black/5 bg-black/[0.01] relative z-20">
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -572,7 +573,7 @@ export default function Sidebar({
             </div>
 
             {/* 目录树/平铺滚动区域 */}
-            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar relative z-10">
               {isLoading ? (
                 <div className="flex items-center justify-center h-20 text-xs text-on-surface-variant/60">
                   <span className="animate-spin mr-2">⏳</span> 正在扫描资源树...

@@ -6,6 +6,14 @@ interface PlayerProps {
   videoUrl: string; // 播放直链 (可以是本地 HTTP 转接 Url，或 WebDAV 直链)
   videoPath: string; // 唯一标识路径 (用以保存进度)
   videoName: string;
+  playbackSpeed: number; // 当前倍速
+  onSpeedChange: (speed: number) => void; // 倍速修改回调
+  hotkeys: {
+    fullscreen: string;
+    speedUp: string;
+    speedDown: string;
+    speedReset: string;
+  };
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onPlayStateChange?: (isPlaying: boolean) => void;
   onEnded?: () => void;
@@ -15,6 +23,9 @@ export default function Player({
   videoUrl,
   videoPath,
   videoName,
+  playbackSpeed,
+  onSpeedChange,
+  hotkeys,
   onTimeUpdate,
   onPlayStateChange,
   onEnded
@@ -22,12 +33,10 @@ export default function Player({
   const artRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<Artplayer | null>(null);
 
+  // 1. 初始化和销毁 ArtPlayer
   useEffect(() => {
     if (!artRef.current) return;
 
-    // 1. 获取该视频的历史进度
-    let initialTime = 0;
-    
     // 初始化 ArtPlayer
     const art = new Artplayer({
       container: artRef.current,
@@ -57,21 +66,22 @@ export default function Player({
       theme: '#0071E3', // Apple Blue 主色
       customType: {},
       plugins: [],
-      // 快捷键控制
-      hotkey: true,
+      hotkey: false, // 禁用 ArtPlayer 默认自带的快捷键，防止与自定义热键重复触发冲突
     });
 
     playerInstanceRef.current = art;
 
-    // 2. 加载进度
+    // 加载进度
     storageService.loadData().then(data => {
       const record = data.progress[videoPath];
       if (record && record.currentTime > 0 && record.currentTime < record.duration - 5) {
         art.currentTime = record.currentTime;
       }
+      // 初始化播放器倍速为外部倍速
+      art.playbackRate = playbackSpeed;
     });
 
-    // 3. 监听事件
+    // 监听事件
     art.on('ready', () => {
       console.log('ArtPlayer is ready');
     });
@@ -82,6 +92,13 @@ export default function Player({
 
     art.on('pause', () => {
       if (onPlayStateChange) onPlayStateChange(false);
+    });
+
+    // 播放器内部通过设置等控制条改变倍速时，同步给 App 状态
+    art.on('video:ratechange', () => {
+      if (art.playbackRate !== playbackSpeed) {
+        onSpeedChange(art.playbackRate);
+      }
     });
 
     // 实时更新当前播放时长
@@ -122,7 +139,66 @@ export default function Player({
     };
   }, [videoUrl, videoPath]);
 
-  // 当外部改变播放器状态（例如触发挂机闲置暂停时）
+  // 2. 同步外部倍速状态变化到播放器
+  useEffect(() => {
+    if (playerInstanceRef.current) {
+      if (playerInstanceRef.current.playbackRate !== playbackSpeed) {
+        playerInstanceRef.current.playbackRate = playbackSpeed;
+      }
+    }
+  }, [playbackSpeed]);
+
+  // 3. 监听全局自定义快捷键（排除输入法和表单聚焦状态）
+  useEffect(() => {
+    const art = playerInstanceRef.current;
+    if (!art) return;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (
+        activeEl.tagName === 'INPUT' || 
+        activeEl.tagName === 'TEXTAREA' || 
+        activeEl.tagName === 'SELECT'
+      )) {
+        return;
+      }
+
+      let key = e.key.toLowerCase();
+      if (e.key === ' ') {
+        key = 'space';
+      }
+      const fullscreenKey = (hotkeys?.fullscreen || 'f').toLowerCase();
+      const speedUpKey = (hotkeys?.speedUp || 'c').toLowerCase();
+      const speedDownKey = (hotkeys?.speedDown || 'x').toLowerCase();
+      const speedResetKey = (hotkeys?.speedReset || 'z').toLowerCase();
+
+      if (key === fullscreenKey) {
+        e.preventDefault();
+        art.fullscreen = !art.fullscreen;
+      } else if (key === speedUpKey) {
+        e.preventDefault();
+        const nextSpeed = Math.min(4.0, Math.round((playbackSpeed + 0.1) * 100) / 100);
+        onSpeedChange(nextSpeed);
+        art.notice.show = `倍速: ${nextSpeed}x`;
+      } else if (key === speedDownKey) {
+        e.preventDefault();
+        const nextSpeed = Math.max(0.1, Math.round((playbackSpeed - 0.1) * 100) / 100);
+        onSpeedChange(nextSpeed);
+        art.notice.show = `倍速: ${nextSpeed}x`;
+      } else if (key === speedResetKey) {
+        e.preventDefault();
+        onSpeedChange(1.0);
+        art.notice.show = `倍速: 1.0x`;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [playbackSpeed, hotkeys, onSpeedChange]);
+
+  // 4. 当外部改变播放器状态（例如触发挂机闲置暂停时）
   useEffect(() => {
     const handlePauseSignal = () => {
       if (playerInstanceRef.current && playerInstanceRef.current.playing) {

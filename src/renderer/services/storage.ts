@@ -32,12 +32,20 @@ export interface MediaSourceConfig {
   };
 }
 
+export interface AppHotkeys {
+  fullscreen: string; // 默认 'f'
+  speedUp: string;    // 默认 'c'
+  speedDown: string;  // 默认 'x'
+  speedReset: string; // 默认 'z'
+}
+
 export interface AppSettings {
   idleTimeout: number; // 闲置超时时长（分钟），默认 15
   autoSync: boolean;
   webdavSyncUrl?: string;
   webdavUser?: string;
   webdavPassword?: string;
+  hotkeys: AppHotkeys;
 }
 
 // 统一数据接口
@@ -55,6 +63,12 @@ const DEFAULT_DATA: AppDataStore = {
   settings: {
     idleTimeout: 15,
     autoSync: false,
+    hotkeys: {
+      fullscreen: 'f',
+      speedUp: 'c',
+      speedDown: 'x',
+      speedReset: 'z'
+    }
   }
 };
 
@@ -77,7 +91,19 @@ class StorageService {
       progress: this.cache?.progress || {},
       dailyLogs: this.cache?.dailyLogs || {},
       sources: this.cache?.sources || [],
-      settings: this.cache?.settings || { idleTimeout: 15, autoSync: false }
+      settings: {
+        idleTimeout: this.cache?.settings?.idleTimeout ?? 15,
+        autoSync: this.cache?.settings?.autoSync ?? false,
+        webdavSyncUrl: this.cache?.settings?.webdavSyncUrl,
+        webdavUser: this.cache?.settings?.webdavUser,
+        webdavPassword: this.cache?.settings?.webdavPassword,
+        hotkeys: this.cache?.settings?.hotkeys || {
+          fullscreen: 'f',
+          speedUp: 'c',
+          speedDown: 'x',
+          speedReset: 'z'
+        }
+      }
     };
 
     return this.cache;

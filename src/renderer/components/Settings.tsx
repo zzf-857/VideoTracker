@@ -5,10 +5,17 @@ import { syncService } from '../services/sync';
 interface SettingsProps {
   refreshSignal: number;
   onRefresh: () => void;
-}
-
-export default function Settings({ refreshSignal, onRefresh }: SettingsProps) {
-  const [settings, setSettings] = useState<AppSettings>({ idleTimeout: 15, autoSync: false });
+}export default function Settings({ refreshSignal, onRefresh }: SettingsProps) {
+  const [settings, setSettings] = useState<AppSettings>({
+    idleTimeout: 15,
+    autoSync: false,
+    hotkeys: {
+      fullscreen: 'f',
+      speedUp: 'c',
+      speedDown: 'x',
+      speedReset: 'z'
+    }
+  });
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle');
   const [syncMsg, setSyncMsg] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
@@ -19,6 +26,9 @@ export default function Settings({ refreshSignal, onRefresh }: SettingsProps) {
   const [webdavPassword, setWebdavPassword] = useState('');
   const [idleTimeout, setIdleTimeout] = useState(15);
   const [autoSync, setAutoSync] = useState(false);
+
+  // 当前正在录制的快捷键字段名
+  const [activeHotkeyKey, setActiveHotkeyKey] = useState<string | null>(null);
 
   useEffect(() => {
     storageService.loadData().then(data => {
@@ -39,6 +49,70 @@ export default function Settings({ refreshSignal, onRefresh }: SettingsProps) {
     showToast('设置已自动保存');
   };
 
+  const handleResetToDefaults = async () => {
+    const defaultSettings: AppSettings = {
+      idleTimeout: 15,
+      autoSync: false,
+      hotkeys: {
+        fullscreen: 'f',
+        speedUp: 'c',
+        speedDown: 'x',
+        speedReset: 'z'
+      }
+    };
+    setIdleTimeout(15);
+    setAutoSync(false);
+    setWebdavUrl('');
+    setWebdavUser('');
+    setWebdavPassword('');
+    
+    setSettings(defaultSettings);
+    await storageService.saveData({ settings: defaultSettings });
+    onRefresh();
+    showToast('已重置为默认设置');
+  };
+
+  // 全局捕获监听器以安全录制快捷键
+  useEffect(() => {
+    if (!activeHotkeyKey) return;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // 阻止所有系统和浏览器默认按键行为 (包括 F5 刷新、F11 全屏、Space/Enter 触发 click 等)
+      e.preventDefault();
+      e.stopPropagation();
+
+      let key = e.key.toLowerCase();
+
+      // 按下 Escape 键时取消录制
+      if (e.key === 'Escape') {
+        setActiveHotkeyKey(null);
+        return;
+      }
+
+      if (e.key === ' ') {
+        key = 'space';
+      }
+
+      // 忽略单纯的修饰键
+      if (['control', 'shift', 'alt', 'meta'].includes(key)) {
+        return;
+      }
+
+      const updatedHotkeys = {
+        ...settings.hotkeys,
+        [activeHotkeyKey]: key
+      };
+
+      handleSaveSettings({ hotkeys: updatedHotkeys });
+      setActiveHotkeyKey(null);
+    };
+
+    // 使用捕获模式确保在任何地方都能提前拦截按键
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown, true);
+    };
+  }, [activeHotkeyKey, settings]);
   // 手动执行 WebDAV 同步
   const handleSync = async () => {
     // 先保存当前的 WebDAV 配置
@@ -77,11 +151,21 @@ export default function Settings({ refreshSignal, onRefresh }: SettingsProps) {
 
   return (
     <div className="max-w-[800px] mx-auto py-8 px-4 h-full overflow-y-auto custom-scrollbar">
-      <header className="mb-8">
-        <h2 className="text-2xl font-headline font-extrabold text-on-surface tracking-tight">系统设置</h2>
-        <p className="text-sm text-on-surface-variant mt-1">
-          个性化您的学习体验，配置 WebDAV 实现多端数据自动同步
-        </p>
+      <header className="mb-8 flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-headline font-extrabold text-on-surface tracking-tight">系统设置</h2>
+          <p className="text-sm text-on-surface-variant mt-1">
+            个性化您的学习体验，配置 WebDAV 实现多端数据自动同步
+          </p>
+        </div>
+        
+        <button
+          onClick={handleResetToDefaults}
+          className="py-1.5 px-3 border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 active:scale-95 text-red-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[16px]">restart_alt</span>
+          一键重置
+        </button>
       </header>
 
       <div className="space-y-6">
@@ -197,47 +281,132 @@ export default function Settings({ refreshSignal, onRefresh }: SettingsProps) {
           </div>
         </section>
 
-        {/* 3. 核心快捷键说明 */}
+        {/* 3. 系统自定义快捷键设置 */}
         <section className="apple-card rounded-2xl p-6 bg-white/80">
-          <h3 className="font-bold text-base text-on-surface mb-4">核心快捷键 (ArtPlayer 内置)</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center gap-4 p-3 bg-black/[0.01] border border-black/5 rounded-xl">
-              <div className="keycap min-w-16 h-8 px-2.5 rounded-lg flex items-center justify-center font-bold text-xs">
-                空格键
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-on-surface">播放 / 暂停</p>
-                <p className="text-[10px] text-on-surface-variant">快速控制视频播放状态</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4 p-3 bg-black/[0.01] border border-black/5 rounded-xl">
-              <div className="keycap min-w-16 h-8 px-2.5 rounded-lg flex items-center justify-center font-bold text-xs">
-                ← / →
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-on-surface">快退 5s / 快进 5s</p>
-                <p className="text-[10px] text-on-surface-variant">精准定位课程讲解点</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 p-3 bg-black/[0.01] border border-black/5 rounded-xl">
-              <div className="keycap min-w-16 h-8 px-2.5 rounded-lg flex items-center justify-center font-bold text-xs">
-                ↑ / ↓
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-on-surface">音量调大 / 调小</p>
-                <p className="text-[10px] text-on-surface-variant">步长为 10%</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 p-3 bg-black/[0.01] border border-black/5 rounded-xl">
-              <div className="keycap min-w-16 h-8 px-2.5 rounded-lg flex items-center justify-center font-bold text-xs">
-                双击视频
-              </div>
+          <div className="mb-4">
+            <h3 className="font-bold text-base text-on-surface">系统自定义快捷键</h3>
+            <p className="text-xs text-on-surface-variant mt-0.5">点击右侧按键卡片即可进入录制状态，按下键盘上的任意按键进行重新绑定</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="flex items-center justify-between p-3 bg-black/[0.01] border border-black/5 rounded-xl">
               <div>
                 <p className="text-xs font-semibold text-on-surface">进入 / 退出全屏</p>
-                <p className="text-[10px] text-on-surface-variant">沉浸式无干扰学习</p>
+                <p className="text-[10px] text-on-surface-variant">快速控制视频全屏状态</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveHotkeyKey('fullscreen')}
+                className={`min-w-20 h-8 px-3 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer select-none transition-all shadow-sm ${
+                  activeHotkeyKey === 'fullscreen'
+                    ? 'bg-primary text-white scale-95 border-primary shadow-inner animate-pulse'
+                    : 'bg-white border border-black/10 text-primary hover:border-primary/40 hover:bg-black/[0.01] active:scale-95'
+                }`}
+                title="点击重新录制绑定按键"
+              >
+                {activeHotkeyKey === 'fullscreen' ? '录制中... (Esc取消)' : (settings.hotkeys?.fullscreen || 'f').toUpperCase()}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-black/[0.01] border border-black/5 rounded-xl">
+              <div>
+                <p className="text-xs font-semibold text-on-surface">增加播放倍速 (+0.1)</p>
+                <p className="text-[10px] text-on-surface-variant">每次增加 0.1 倍播放速度</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveHotkeyKey('speedUp')}
+                className={`min-w-20 h-8 px-3 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer select-none transition-all shadow-sm ${
+                  activeHotkeyKey === 'speedUp'
+                    ? 'bg-primary text-white scale-95 border-primary shadow-inner animate-pulse'
+                    : 'bg-white border border-black/10 text-primary hover:border-primary/40 hover:bg-black/[0.01] active:scale-95'
+                }`}
+                title="点击重新录制绑定按键"
+              >
+                {activeHotkeyKey === 'speedUp' ? '录制中... (Esc取消)' : (settings.hotkeys?.speedUp || 'c').toUpperCase()}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-black/[0.01] border border-black/5 rounded-xl">
+              <div>
+                <p className="text-xs font-semibold text-on-surface">减少播放倍速 (-0.1)</p>
+                <p className="text-[10px] text-on-surface-variant">每次减少 0.1 倍播放速度</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveHotkeyKey('speedDown')}
+                className={`min-w-20 h-8 px-3 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer select-none transition-all shadow-sm ${
+                  activeHotkeyKey === 'speedDown'
+                    ? 'bg-primary text-white scale-95 border-primary shadow-inner animate-pulse'
+                    : 'bg-white border border-black/10 text-primary hover:border-primary/40 hover:bg-black/[0.01] active:scale-95'
+                }`}
+                title="点击重新录制绑定按键"
+              >
+                {activeHotkeyKey === 'speedDown' ? '录制中... (Esc取消)' : (settings.hotkeys?.speedDown || 'x').toUpperCase()}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-black/[0.01] border border-black/5 rounded-xl">
+              <div>
+                <p className="text-xs font-semibold text-on-surface">重置播放倍速 (1.0x)</p>
+                <p className="text-[10px] text-on-surface-variant">一键将播放速度恢复到原速</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveHotkeyKey('speedReset')}
+                className={`min-w-20 h-8 px-3 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer select-none transition-all shadow-sm ${
+                  activeHotkeyKey === 'speedReset'
+                    ? 'bg-primary text-white scale-95 border-primary shadow-inner animate-pulse'
+                    : 'bg-white border border-black/10 text-primary hover:border-primary/40 hover:bg-black/[0.01] active:scale-95'
+                }`}
+                title="点击重新录制绑定按键"
+              >
+                {activeHotkeyKey === 'speedReset' ? '录制中... (Esc取消)' : (settings.hotkeys?.speedReset || 'z').toUpperCase()}
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-black/5">
+            <h4 className="font-bold text-xs text-on-surface-variant uppercase tracking-wider mb-3">播放器内置默认快捷键</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-4 p-3 bg-black/[0.01] border border-black/5 rounded-xl">
+                <div className="keycap min-w-16 h-8 px-2.5 rounded-lg flex items-center justify-center font-bold text-xs select-none">
+                  空格键
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-on-surface">播放 / 暂停</p>
+                  <p className="text-[10px] text-on-surface-variant">快速控制视频播放状态</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4 p-3 bg-black/[0.01] border border-black/5 rounded-xl">
+                <div className="keycap min-w-16 h-8 px-2.5 rounded-lg flex items-center justify-center font-bold text-xs select-none">
+                  ← / →
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-on-surface">快退 5s / 快进 5s</p>
+                  <p className="text-[10px] text-on-surface-variant">精准定位课程讲解点</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 p-3 bg-black/[0.01] border border-black/5 rounded-xl">
+                <div className="keycap min-w-16 h-8 px-2.5 rounded-lg flex items-center justify-center font-bold text-xs select-none">
+                  ↑ / ↓
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-on-surface">音量调大 / 调小</p>
+                  <p className="text-[10px] text-on-surface-variant">步长为 10%</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 p-3 bg-black/[0.01] border border-black/5 rounded-xl">
+                <div className="keycap min-w-16 h-8 px-2.5 rounded-lg flex items-center justify-center font-bold text-xs select-none">
+                  双击视频
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-on-surface">进入 / 退出全屏</p>
+                  <p className="text-[10px] text-on-surface-variant">沉浸式无干扰学习</p>
+                </div>
               </div>
             </div>
           </div>

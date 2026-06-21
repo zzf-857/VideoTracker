@@ -82,3 +82,19 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* 视频中间的播放/暂停大按钮改为主题色，并增加柔和主题色投影以在白底PPT背景上醒目显示 */
+.art-state {
+  color: #0071E3 !important;
+  fill: #0071E3 !important;
+}
+.art-state svg {
+  filter: drop-shadow(0px 4px 16px rgba(0, 113, 227, 0.6)) !important;
+}
+.art-state svg path, .art-play-icon svg path, .art-play-icon path {
+  fill: #0071E3 !important;
+}
+.art-state svg, .art-play-icon svg {
+  color: #0071E3 !important;
+}
+

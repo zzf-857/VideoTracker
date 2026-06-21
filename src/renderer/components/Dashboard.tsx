@@ -9,6 +9,8 @@ interface DashboardProps {
   totalLocalDuration: number; // 本地视频总时长（秒）
   playedLocalDuration: number; // 本地已看完视频总时长（秒）
   refreshSignal: number;
+  playbackSpeed: number;
+  onSpeedChange: (speed: number) => void;
 }
 
 export default function Dashboard({
@@ -17,11 +19,14 @@ export default function Dashboard({
   playedVideoCount,
   totalLocalDuration,
   playedLocalDuration,
-  refreshSignal
+  refreshSignal,
+  playbackSpeed,
+  onSpeedChange
 }: DashboardProps) {
   const [dailyHours, setDailyHours] = useState<number>(1.5); // 每日目标学习时长（小时）
   const [dailyEpisodes, setDailyEpisodes] = useState<number>(3); // 每日观看集数
-  const [speed, setSpeed] = useState<number>(1.25); // 倍速
+  const speed = playbackSpeed;
+  const setSpeed = onSpeedChange;
   const [statViewMode, setStatViewMode] = useState<'count' | 'duration'>('count'); // 统计文字模式
   
   // 计算进度百分比
@@ -93,10 +98,8 @@ export default function Dashboard({
 
             <div className="flex flex-col">
               <span className="text-[9px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">播放倍速</span>
-              <CustomSelect
-                value={speed}
-                onChange={(val) => setSpeed(val)}
-                options={[
+              {(() => {
+                const defaultOptions = [
                   { value: 1, label: '1.0 x' },
                   { value: 1.25, label: '1.25 x' },
                   { value: 1.5, label: '1.5 x' },
@@ -104,10 +107,22 @@ export default function Dashboard({
                   { value: 2, label: '2.0 x' },
                   { value: 2.5, label: '2.5 x' },
                   { value: 3, label: '3.0 x' }
-                ]}
-                className="min-w-[80px]"
-                variant="card"
-              />
+                ];
+                const hasSpeed = defaultOptions.some(o => Math.abs(o.value - speed) < 0.01);
+                const speedOptions = hasSpeed
+                  ? defaultOptions
+                  : [...defaultOptions, { value: speed, label: `${speed.toFixed(2).replace(/\.?0+$/, '')} x` }].sort((a, b) => a.value - b.value);
+                
+                return (
+                  <CustomSelect
+                    value={speed}
+                    onChange={(val) => setSpeed(val)}
+                    options={speedOptions}
+                    className="min-w-[80px]"
+                    variant="card"
+                  />
+                );
+              })()}
             </div>
           </>
         ) : (
