@@ -14,6 +14,9 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
   
   // 视图切换：'minute' (分钟) 或 'hour' (小时)
   const [unit, setUnit] = useState<'minute' | 'hour'>('minute');
+
+  // 时间段选择：最近 30 | 90 | 180 | 365 天
+  const [daysRange, setDaysRange] = useState<30 | 90 | 180 | 365>(365);
   
   // 右键菜单状态
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; dateStr: string; videoPath: string } | null>(null);
@@ -93,12 +96,12 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
     return unit === 'minute' ? '分钟' : '小时';
   };
 
-  // 生成年度热力图数据（全尺寸网格，365天，每列7个格子，共53列）
-  const getFullHeatmapGrid = () => {
+  // 生成热力图数据（全尺寸网格，支持 days 天数，每列 7 个格子）
+  const getHeatmapGrid = (days: number) => {
     const today = new Date();
     const grid = [];
     
-    for (let i = 364; i >= 0; i--) {
+    for (let i = days - 1; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
@@ -121,16 +124,16 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
     return grid;
   };
 
-  const fullGrid = getFullHeatmapGrid();
-  const columns: typeof fullGrid[] = [];
-  let currentColumn: typeof fullGrid = [];
+  const gridData = getHeatmapGrid(daysRange);
+  const columns: typeof gridData[] = [];
+  let currentColumn: typeof gridData = [];
 
-  const firstDay = fullGrid[0].dayOfWeek;
+  const firstDay = gridData.length > 0 ? gridData[0].dayOfWeek : 0;
   for (let i = 0; i < firstDay; i++) {
     currentColumn.push({ dateStr: '', duration: 0, bgClass: 'opacity-0 pointer-events-none', dayOfWeek: i });
   }
 
-  for (const cell of fullGrid) {
+  for (const cell of gridData) {
     currentColumn.push(cell);
     if (currentColumn.length === 7) {
       columns.push(currentColumn);
@@ -143,6 +146,51 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
     }
     columns.push(currentColumn);
   }
+
+  // 动态计算底部对齐的月份标识
+  const getMonthLabels = () => {
+    let lastMonth = '';
+    return columns.map((col) => {
+      const validCell = col.find(c => c.dateStr !== '');
+      if (!validCell) return '';
+      const date = new Date(validCell.dateStr);
+      const mName = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+      if (mName !== lastMonth) {
+        lastMonth = mName;
+        return mName;
+      }
+      return '';
+    });
+  };
+  const monthLabels = getMonthLabels();
+
+  // 自适应格子尺寸配置
+  const heatmapConfig = {
+    30: {
+      cellClass: 'w-7 h-7 rounded-md',
+      gapClass: 'gap-2',
+      containerGapClass: 'gap-2',
+      cellWidth: '28px'
+    },
+    90: {
+      cellClass: 'w-5 h-5 rounded-md',
+      gapClass: 'gap-1.5',
+      containerGapClass: 'gap-1.5',
+      cellWidth: '20px'
+    },
+    180: {
+      cellClass: 'w-4 h-4 rounded-sm',
+      gapClass: 'gap-1',
+      containerGapClass: 'gap-1',
+      cellWidth: '16px'
+    },
+    365: {
+      cellClass: 'w-2.5 h-2.5 rounded-[2px]',
+      gapClass: 'gap-1',
+      containerGapClass: 'gap-1',
+      cellWidth: '10px'
+    }
+  }[daysRange];
 
   // 整理所有历史日志时间轴数据
   const getAllLogsSorted = () => {
@@ -240,37 +288,68 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
       <div className="space-y-6">
         {/* 1. 年度 365 天大热力图 (Spans full width) */}
         <section className="apple-card p-6 rounded-2xl bg-white/80 border border-black/5 shadow-sm transition-shadow hover:shadow-md">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-sm text-on-surface">年度学习热力图 (最近 365 天)</h3>
-            <div className="flex items-center gap-2 text-[10px] font-bold text-on-surface-variant uppercase">
-              <span>少</span>
-              <div className="flex gap-0.5">
-                <div className="w-2.5 h-2.5 bg-black/5 rounded-sm" />
-                <div className="w-2.5 h-2.5 bg-primary/20 rounded-sm" />
-                <div className="w-2.5 h-2.5 bg-primary/40 rounded-sm" />
-                <div className="w-2.5 h-2.5 bg-primary/70 rounded-sm" />
-                <div className="w-2.5 h-2.5 bg-primary rounded-sm" />
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+            <h3 className="font-bold text-sm text-on-surface">
+              {daysRange === 365 ? '年度' : daysRange === 180 ? '半年' : daysRange === 90 ? '季度' : '月度'}学习热力图 (最近 {daysRange} 天)
+            </h3>
+            
+            {/* 时间间隔切换 Pills */}
+            <div className="flex items-center gap-4 self-end sm:self-auto">
+              <div className="flex bg-black/[0.04] p-1 rounded-xl gap-0.5 border border-black/5 scale-90 origin-right">
+                {([30, 90, 180, 365] as const).map(d => (
+                  <button
+                    key={d}
+                    onClick={() => setDaysRange(d)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      daysRange === d
+                        ? 'bg-white text-primary shadow-sm'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    {d}天
+                  </button>
+                ))}
               </div>
-              <span>多</span>
+
+              <div className="flex items-center gap-2 text-[10px] font-bold text-on-surface-variant uppercase">
+                <span>少</span>
+                <div className="flex gap-0.5">
+                  <div className="w-2.5 h-2.5 bg-black/5 rounded-sm" />
+                  <div className="w-2.5 h-2.5 bg-primary/20 rounded-sm" />
+                  <div className="w-2.5 h-2.5 bg-primary/40 rounded-sm" />
+                  <div className="w-2.5 h-2.5 bg-primary/70 rounded-sm" />
+                  <div className="w-2.5 h-2.5 bg-primary rounded-sm" />
+                </div>
+                <span>多</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-col gap-1 overflow-x-auto pb-2 custom-scrollbar">
-            <div className="flex gap-1.5">
+          <div className="flex flex-col gap-1.5 overflow-x-auto pb-2 custom-scrollbar">
+            <div className={`flex ${heatmapConfig.containerGapClass}`}>
               {columns.map((column, colIdx) => (
-                <div key={colIdx} className="flex flex-col gap-1.5">
+                <div key={colIdx} className={`flex flex-col ${heatmapConfig.gapClass}`}>
                   {column.map((cell, cellIdx) => (
                     <div
                       key={cellIdx}
-                      className={`heatmap-cell ${cell.bgClass} w-2.5 h-2.5 rounded-[2px]`}
+                      className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-200`}
                       title={cell.dateStr ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
                     />
                   ))}
                 </div>
               ))}
             </div>
-            <div className="flex justify-between text-[9px] font-bold text-on-surface-variant px-1 mt-2 tracking-widest uppercase">
-              <span>JAN</span><span>MAR</span><span>MAY</span><span>JUL</span><span>SEP</span><span>NOV</span>
+            {/* 动态月份底部标识 */}
+            <div className={`flex ${heatmapConfig.containerGapClass} mt-2 select-none`}>
+              {monthLabels.map((label, idx) => (
+                <div
+                  key={idx}
+                  style={{ width: heatmapConfig.cellWidth }}
+                  className="text-[9px] font-bold text-on-surface-variant text-left overflow-visible whitespace-nowrap"
+                >
+                  {label}
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -287,18 +366,25 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                   const heightPercent = Math.max(10, Math.round((duration / maxWeeklySecs) * 100));
                   const isToday = idx === 6;
                   return (
-                    <div key={idx} className="flex flex-col items-center gap-2 flex-1">
+                    <div key={idx} className="flex flex-col items-center gap-2 flex-1 group relative">
+                      {/* 迷你浮动 Tooltip 气泡 */}
+                      <div className="absolute bottom-[calc(100%-8px)] left-1/2 -translate-x-1/2 bg-[#1D1D1F] text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-md opacity-0 scale-90 translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 transition-all duration-200 whitespace-nowrap z-20">
+                        {formatValue(duration)} {getUnitLabel()}
+                      </div>
+                      
                       {/* 固定高度的容器，让百分比高度生效，并用 justify-end 让柱子从底部向上长 */}
                       <div className="h-28 w-full flex flex-col justify-end">
                         <div 
                           style={{ height: `${heightPercent}%` }}
-                          className={`w-full rounded-md transition-all duration-500 hover:opacity-85 ${
-                            isToday ? 'bg-primary shadow-sm shadow-primary/20' : 'bg-primary/20'
+                          className={`w-full rounded-md transition-all duration-300 origin-bottom transform cursor-pointer ${
+                            isToday 
+                              ? 'bg-primary shadow-sm shadow-primary/20 hover:scale-x-105 hover:scale-y-105 hover:-translate-y-0.5 hover:shadow-md hover:shadow-primary/30' 
+                              : 'bg-primary/20 hover:bg-primary/40 hover:scale-x-105 hover:scale-y-105 hover:-translate-y-0.5'
                           }`}
                           title={`学习 ${formatValue(duration)} ${getUnitLabel()}`}
                         />
                       </div>
-                      <span className={`text-[10px] font-semibold ${isToday ? 'text-primary font-bold' : 'text-on-surface-variant'}`}>
+                      <span className={`text-[10px] font-semibold transition-colors duration-200 group-hover:text-primary ${isToday ? 'text-primary font-bold' : 'text-on-surface-variant'}`}>
                         {weeklyDays[idx]}
                       </span>
                     </div>
@@ -308,19 +394,57 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
             </section>
 
             {/* 数据概览卡片 - 移除 apple-card 防止背景颜色被 rgba(255,255,255,0.8) 覆盖 */}
-            <section className="p-6 rounded-2xl bg-[#1D1D1F] text-white relative overflow-hidden group border border-black/5 shadow-sm shadow-black/10">
-              <div className="relative z-10">
+            <section className="p-6 rounded-2xl bg-[#1D1D1F] text-white relative overflow-hidden group border border-black/5 shadow-sm shadow-black/10 flex flex-row items-center justify-between gap-6 min-h-[160px]">
+              <div className="relative z-10 flex-1 max-w-[65%]">
                 <span className="text-white/60 font-bold text-[9px] uppercase tracking-wider">总览看板</span>
                 <h4 className="text-xl font-headline font-extrabold text-white mt-2">专注达成</h4>
-                <p className="text-white/70 text-xs mt-2 leading-relaxed">
+                <p className="text-white/70 text-xs mt-2.5 leading-relaxed">
                   您已累计学习了 <span className="text-primary font-extrabold text-sm bg-white/10 px-2 py-0.5 rounded">{formatValue(totalSeconds)}</span> {getUnitLabel()}。<br />
                   最长连续学习天数：<span className="text-primary font-extrabold text-sm bg-white/10 px-2 py-0.5 rounded">{longestStreak}</span> 天。<br />
                   坚持这个节奏，终将学有所成！
                 </p>
               </div>
-              <span className="material-symbols-outlined text-[80px] text-white/5 absolute right-2 bottom-0 pointer-events-none group-hover:text-white/10 transition-colors">
-                bolt
-              </span>
+              
+              <div className="relative flex items-center justify-center pr-2 select-none w-[110px] h-[110px] shrink-0">
+                {/* 奖杯发光背景 */}
+                <div className="absolute w-20 h-20 rounded-full bg-primary/20 blur-xl group-hover:bg-primary/30 transition-all duration-500 animate-pulse pointer-events-none" />
+                <svg viewBox="0 0 100 100" className="w-24 h-24 animate-float relative z-10 drop-shadow-[0_4px_12px_rgba(245,166,35,0.3)]">
+                  <defs>
+                    <linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#FFE066" />
+                      <stop offset="30%" stopColor="#F5A623" />
+                      <stop offset="70%" stopColor="#D0021B" />
+                      <stop offset="100%" stopColor="#F8E71C" />
+                    </linearGradient>
+                    <linearGradient id="star-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#FFF" />
+                      <stop offset="100%" stopColor="#F5A623" />
+                    </linearGradient>
+                  </defs>
+                  
+                  {/* 底部基座 */}
+                  <path d="M25 80 L75 80 L70 70 L30 70 Z" fill="#2C2C2E" stroke="#48484A" strokeWidth="1" />
+                  <rect x="35" y="80" width="30" height="5" rx="1.5" fill="#1C1C1E" />
+                  
+                  {/* 支架/颈部 */}
+                  <path d="M42 70 L58 70 L54 58 L46 58 Z" fill="url(#gold-grad)" />
+                  <ellipse cx="50" cy="58" rx="8" ry="2" fill="#D0021B" opacity="0.3" />
+
+                  {/* 杯身 */}
+                  <path d="M30 25 C30 25 30 50 50 55 C70 50 70 25 70 25 Z" fill="url(#gold-grad)" />
+                  <path d="M50 25 C50 25 50 50 50 55 C50 50 70 25 70 25 Z" fill="#FFE066" opacity="0.2" /> {/* 高光 */}
+
+                  {/* 杯耳 (左) */}
+                  <path d="M30 30 C20 30 20 45 30 48 M30 34 C24 34 24 42 30 44" fill="none" stroke="url(#gold-grad)" strokeWidth="3" strokeLinecap="round" />
+                  {/* 杯耳 (右) */}
+                  <path d="M70 30 C80 30 80 45 70 48 M70 34 C76 34 76 42 70 44" fill="none" stroke="url(#gold-grad)" strokeWidth="3" strokeLinecap="round" />
+
+                  {/* 星星闪烁 (装饰) */}
+                  <path d="M22 15 L24 20 L29 21 L24 22 L22 27 L20 22 L15 21 L20 20 Z" fill="url(#star-grad)" className="animate-pulse" style={{ animationDelay: '0.2s' }} />
+                  <path d="M78 12 L79.5 16 L83.5 17 L79.5 18 L78 22 L76.5 18 L72.5 17 L76.5 16 Z" fill="url(#star-grad)" className="animate-pulse" style={{ animationDelay: '0.8s' }} />
+                  <path d="M50 15 L51 18 L54 18.5 L51 19 L50 22 L49 19 L46 18.5 L49 18 Z" fill="#FFF" className="animate-pulse" />
+                </svg>
+              </div>
             </section>
           </div>
 
