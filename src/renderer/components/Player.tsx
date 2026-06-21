@@ -19,6 +19,7 @@ interface PlayerProps {
   onEnded?: () => void;
   activeChapters?: any[]; // 新增：当前章节列表
   seekSignal?: { seconds: number; time: number } | null; // 新增：跳转信号
+  sourceId?: string; // 新增：视频所属数据源 ID
 }
 
 export default function Player({
@@ -32,10 +33,14 @@ export default function Player({
   onPlayStateChange,
   onEnded,
   activeChapters = [],
-  seekSignal
+  seekSignal,
+  sourceId = ''
 }: PlayerProps) {
   const artRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<Artplayer | null>(null);
+  const lastTimeRef = useRef<number>(0);
+  const durationRef = useRef<number>(0);
+  const wasPlayingBeforeBlur = useRef<boolean>(false);
 
   // 1. 初始化和销毁 ArtPlayer
   useEffect(() => {
@@ -338,23 +343,53 @@ export default function Player({
       progressEl.addEventListener('mouseleave', handleMouseLeave);
     }
 
-    // 加载进度
-    storageService.loadData().then(data => {
-      const record = data.progress[videoPath];
-      if (record && record.currentTime > 0 && record.currentTime < record.duration - 5) {
-        art.currentTime = record.currentTime;
+    // 强制无节流直接保存当前播放进度的方法
+    const saveProgressForce = () => {
+      const finalTime = lastTimeRef.current;
+      const finalDuration = durationRef.current;
+      if (finalTime > 0 && finalDuration > 0) {
+        const isFinished = finalTime >= finalDuration * 0.95;
+        storageService.saveVideoProgress(videoPath, {
+          currentTime: finalTime,
+          duration: finalDuration,
+          isFinished
+        });
       }
-      // 初始化播放器倍速为外部倍速
-      art.playbackRate = playbackSpeed;
-    });
+    };
 
     // 监听事件
     art.on('ready', () => {
       console.log('ArtPlayer is ready');
+      storageService.loadData().then(data => {
+        const record = data.progress[videoPath];
+        if (record && record.currentTime > 0 && record.currentTime < record.duration - 5) {
+          art.currentTime = record.currentTime;
+          lastTimeRef.current = record.currentTime;
+          durationRef.current = record.duration;
+          
+          // 优雅的进度恢复气泡提醒
+          const m = Math.floor(record.currentTime / 60);
+          const s = Math.floor(record.currentTime % 60);
+          const timeStr = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+          art.notice.show = `已自动恢复上次播放进度至 ${timeStr}`;
+        } else {
+          lastTimeRef.current = 0;
+          durationRef.current = art.duration || 0;
+        }
+        art.playbackRate = playbackSpeed;
+
+        // 保存当前视频为最后播放的视频
+        if (sourceId) {
+          storageService.saveLastPlayedVideo(videoPath, videoName, sourceId);
+        }
+      });
       updateProgressGaps();
     });
 
     art.on('video:durationchange', () => {
+      if (art.duration > 0) {
+        durationRef.current = art.duration;
+      }
       updateProgressGaps();
     });
 
@@ -368,6 +403,7 @@ export default function Player({
 
     art.on('pause', () => {
       if (onPlayStateChange) onPlayStateChange(false);
+      saveProgressForce(); // 暂停时立即保存
     });
 
     // 原生画中画退出时自动聚焦唤醒主程序
@@ -384,21 +420,37 @@ export default function Player({
       }
     });
 
-    // 实时更新当前播放时长
+    // 实时更新当前播放时长并节流写入
+    let lastSavedTime = 0;
+    let lastSavedRealTime = 0;
+
     art.on('video:timeupdate', () => {
       if (isUnmounting) return;
       const currentTime = art.currentTime;
       const duration = art.duration;
       if (duration > 0) {
+        if (currentTime > 0) {
+          lastTimeRef.current = currentTime;
+        }
+        durationRef.current = duration;
+        
         if (onTimeUpdate) onTimeUpdate(currentTime, duration);
 
-        // 实时保存播放进度 (每隔 3 秒自动保存一次到本地 Cache，避免频繁 I/O)
-        const isFinished = currentTime >= duration * 0.95; // 播放到 95% 即认为看完了
-        storageService.saveVideoProgress(videoPath, {
-          currentTime,
-          duration,
-          isFinished
-        });
+        // 节流写入：正常播放时每 2 秒保存一次，避免频繁 I/O
+        const now = Date.now();
+        const timeDiff = Math.abs(currentTime - lastSavedTime);
+        const realTimeDiff = now - lastSavedRealTime;
+        const isFinished = currentTime >= duration * 0.95;
+
+        if (isFinished || timeDiff >= 2 || realTimeDiff >= 2000) {
+          lastSavedTime = currentTime;
+          lastSavedRealTime = now;
+          storageService.saveVideoProgress(videoPath, {
+            currentTime,
+            duration,
+            isFinished
+          });
+        }
       }
     });
 
@@ -415,18 +467,42 @@ export default function Player({
       if (onEnded) onEnded();
     });
 
+    // 失去/重新获得焦点自动暂停与恢复
+    const handleWindowBlur = () => {
+      if (art && art.playing) {
+        wasPlayingBeforeBlur.current = true;
+        art.pause();
+        saveProgressForce(); // 失去焦点暂停并强制保存
+      } else {
+        wasPlayingBeforeBlur.current = false;
+      }
+    };
+
+    const handleWindowFocus = () => {
+      if (wasPlayingBeforeBlur.current && art) {
+        art.play().catch(err => console.warn('Auto-resume failed on window focus:', err));
+        wasPlayingBeforeBlur.current = false;
+      }
+    };
+
+    // 监听窗口关闭/刷新事件，防止数据丢失
+    const handleBeforeUnload = () => {
+      saveProgressForce();
+    };
+
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
       isUnmounting = true;
 
-      // 强制在卸载前同步执行一次最高精度的落盘，防止 timeupdate 遗漏或被销毁覆写为 0
-      if (art && art.currentTime > 0 && art.duration > 0) {
-        const isFinished = art.currentTime >= art.duration * 0.95;
-        storageService.saveVideoProgress(videoPath, {
-          currentTime: art.currentTime,
-          duration: art.duration,
-          isFinished
-        });
-      }
+      // 强制在卸载前同步执行一次最高精度的落盘，使用 lastTimeRef.current 彻底避免 DOM 重置为 0 的问题
+      saveProgressForce();
+
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
 
       if (handleMouseMove && progressEl) {
         progressEl.removeEventListener('mousemove', handleMouseMove);
@@ -451,7 +527,7 @@ export default function Player({
       }
       playerInstanceRef.current = null;
     };
-  }, [videoUrl, videoPath, activeChapters]);
+  }, [videoUrl, videoPath, activeChapters, sourceId]);
 
   // 2. 同步外部倍速状态变化到播放器
   useEffect(() => {

@@ -56,6 +56,11 @@ export interface AppDataStore {
   sources: MediaSourceConfig[];
   settings: AppSettings;
   timelines?: Record<string, string>; // key 是视频的相对路径或唯一标识
+  lastPlayedVideo?: {
+    path: string;
+    name: string;
+    sourceId: string;
+  };
 }
 
 const DEFAULT_DATA: AppDataStore = {
@@ -114,7 +119,8 @@ class StorageService {
           speedReset: 'z'
         }
       },
-      timelines: this.cache?.timelines || {}
+      timelines: this.cache?.timelines || {},
+      lastPlayedVideo: this.cache?.lastPlayedVideo
     };
 
     return this.cache;
@@ -150,6 +156,13 @@ class StorageService {
       delete data.timelines[videoPath];
       await this.saveData({ timelines: data.timelines });
     }
+  }
+
+  // 快捷方法：保存最近一次播放的视频信息
+  async saveLastPlayedVideo(path: string, name: string, sourceId: string): Promise<void> {
+    const data = await this.loadData();
+    data.lastPlayedVideo = { path, name, sourceId };
+    await this.saveData({ lastPlayedVideo: data.lastPlayedVideo });
   }
 
   // 快捷方法：更新单个视频进度

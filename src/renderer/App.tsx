@@ -23,6 +23,38 @@ export interface TreeNode {
   isLoaded?: boolean;
 }
 
+export async function getVideoStreamUrlByPath(filePath: string, source: MediaSourceConfig): Promise<string> {
+  if (!source) return '';
+  if (source.type === 'local') {
+    if ('electronAPI' in window) {
+      return await (window as any).electronAPI.getVideoStreamUrl(filePath);
+    }
+    return '';
+  } else {
+    const parsedUrl = new URL(source.settings?.url || '');
+    if (source.settings?.username && source.settings?.password) {
+      parsedUrl.username = encodeURIComponent(source.settings.username);
+      parsedUrl.password = encodeURIComponent(source.settings.password);
+    }
+    
+    const relative = filePath.startsWith('/') ? filePath : `/${filePath}`;
+    const urlPath = parsedUrl.pathname.endsWith('/') ? parsedUrl.pathname.slice(0, -1) : parsedUrl.pathname;
+    
+    if (filePath.startsWith(urlPath)) {
+      parsedUrl.pathname = filePath;
+    } else {
+      parsedUrl.pathname = `${urlPath}${relative}`;
+    }
+    
+    const remoteUrl = parsedUrl.toString();
+    if ('electronAPI' in window) {
+      return await (window as any).electronAPI.getVideoStreamUrl(remoteUrl);
+    }
+    return remoteUrl;
+  }
+}
+
+
 export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [appData, setAppData] = useState<AppDataStore | null>(null);
@@ -84,6 +116,7 @@ export default function App() {
   // 截图队列句柄
   const queueRef = useRef<number[]>([]);
   const isGeneratingRef = useRef<boolean>(false);
+  const hasAutoRestored = useRef<boolean>(false);
 
   const startGeneration = (times: number[]) => {
     queueRef.current = [...times];
@@ -259,11 +292,35 @@ export default function App() {
     };
   }, [isResizing, isFootprintResizing, isChaptersResizing]);
 
-  // 加载数据源
+  // 加载数据源与启动自动恢复
   useEffect(() => {
     storageService.loadData().then(data => {
       setAppData(data);
       setSources(data.sources);
+      
+      // 检查是否有上一次播放的视频且尚未执行过自动恢复
+      if (!hasAutoRestored.current && data.lastPlayedVideo && data.sources.length > 0) {
+        const lastVid = data.lastPlayedVideo;
+        const matchingSource = data.sources.find(s => s.id === lastVid.sourceId);
+        if (matchingSource) {
+          hasAutoRestored.current = true;
+          setCurrentSource(matchingSource);
+          
+          // 获取上次视频的流地址并自动加载
+          getVideoStreamUrlByPath(lastVid.path, matchingSource).then(url => {
+            if (url) {
+              setActiveVideoUrl(url);
+              setActiveVideoPath(lastVid.path);
+              setActiveVideoName(lastVid.name);
+              setIsPlaying(false);
+            }
+          }).catch(err => {
+            console.error('Auto restore video failed:', err);
+          });
+          return;
+        }
+      }
+
       if (data.sources.length > 0) {
         const exists = data.sources.some(s => s.id === currentSource?.id);
         if (!currentSource || !exists) {
@@ -346,6 +403,13 @@ export default function App() {
     setRefreshSignal(prev => prev + 1);
   };
 
+  // 切换选项卡时，若切出播放大屏，强制停止计时
+  useEffect(() => {
+    if (currentTab !== 'dashboard') {
+      setIsPlaying(false);
+    }
+  }, [currentTab]);
+
   // 选择视频播放
   const handleSelectVideo = (url: string, path: string, name: string) => {
     setActiveVideoUrl(url);
@@ -397,33 +461,7 @@ export default function App() {
   // 解析某个节点的播放 URL
   const getVideoStreamUrl = async (node: TreeNode): Promise<string> => {
     if (!currentSource) return '';
-    if (currentSource.type === 'local') {
-      if ('electronAPI' in window) {
-        return await (window as any).electronAPI.getVideoStreamUrl(node.path);
-      }
-      return '';
-    } else {
-      const parsedUrl = new URL(currentSource.settings?.url || '');
-      if (currentSource.settings?.username && currentSource.settings?.password) {
-        parsedUrl.username = encodeURIComponent(currentSource.settings.username);
-        parsedUrl.password = encodeURIComponent(currentSource.settings.password);
-      }
-      
-      const relative = node.path.startsWith('/') ? node.path : `/${node.path}`;
-      const urlPath = parsedUrl.pathname.endsWith('/') ? parsedUrl.pathname.slice(0, -1) : parsedUrl.pathname;
-      
-      if (node.path.startsWith(urlPath)) {
-        parsedUrl.pathname = node.path;
-      } else {
-        parsedUrl.pathname = `${urlPath}${relative}`;
-      }
-      
-      const remoteUrl = parsedUrl.toString();
-      if ('electronAPI' in window) {
-        return await (window as any).electronAPI.getVideoStreamUrl(remoteUrl);
-      }
-      return remoteUrl;
-    }
+    return getVideoStreamUrlByPath(node.path, currentSource);
   };
 
   // 后台静默扫描未播视频的时长并保存
@@ -695,6 +733,7 @@ export default function App() {
                   onEnded={handleRefresh}
                   activeChapters={activeChapters}
                   seekSignal={seekSignal}
+                  sourceId={currentSource?.id}
                 />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-[#1e1b4b]/20 to-[#0b0b0f]/10">
