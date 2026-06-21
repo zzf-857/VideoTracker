@@ -19,3 +19,7 @@
 *   **fix: 修复 esbuild 与 Vite 编译配置，完美适配 Tailwind CSS v4** (b76b043)
     *   **时间**: 2026-06-21
     *   **描述**: 修正了 esbuild 编译 flags，指定 Vite root 指向渲染进程目录，调整 CSS 的 Tailwind 导入语法，配置 postcss.config 引入新版 @tailwindcss/postcss。
+
+*   **fix: 强绑定 127.0.0.1 保证主进程成功加载页面** (e329f80)
+    *   **时间**: 2026-06-21
+    *   **描述**: 锁定 Vite 监听 IP 为 127.0.0.1，优化 Electron 主进程窗口的 did-fail-load 重试，解决并发加载引起的白屏。

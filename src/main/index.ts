@@ -177,8 +177,18 @@ function createWindow() {
 
   // 开发环境加载 Vite dev server，生产环境加载 dist/index.html
   if (!app.isPackaged) {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadURL('http://127.0.0.1:5173');
     mainWindow.webContents.openDevTools();
+
+    // 自动重试机制：防止 concurrently 并行启动时 Vite Dev Server 还没完全就绪而白屏
+    mainWindow.webContents.on('did-fail-load', () => {
+      console.log('Vite 服务尚未完全就绪，正在尝试重连...');
+      setTimeout(() => {
+        if (mainWindow) {
+          mainWindow.loadURL('http://127.0.0.1:5173');
+        }
+      }, 1000);
+    });
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
