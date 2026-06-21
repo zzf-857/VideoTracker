@@ -164,31 +164,27 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
   };
   const monthLabels = getMonthLabels();
 
-  // 自适应格子尺寸配置
+  // 自适应格子及月份布局配置
   const heatmapConfig = {
     30: {
-      cellClass: 'w-7 h-7 rounded-md',
-      gapClass: 'gap-2',
-      containerGapClass: 'gap-2',
-      cellWidth: '28px'
+      cellClass: 'w-full aspect-square rounded-md',
+      colStyle: { flex: '1 1 0%', maxWidth: '32px', minWidth: '20px' },
+      gapClass: 'gap-2'
     },
     90: {
-      cellClass: 'w-5 h-5 rounded-md',
-      gapClass: 'gap-1.5',
-      containerGapClass: 'gap-1.5',
-      cellWidth: '20px'
+      cellClass: 'w-full aspect-square rounded-md',
+      colStyle: { flex: '1 1 0%', maxWidth: '22px', minWidth: '14px' },
+      gapClass: 'gap-1.5'
     },
     180: {
-      cellClass: 'w-4 h-4 rounded-sm',
-      gapClass: 'gap-1',
-      containerGapClass: 'gap-1',
-      cellWidth: '16px'
+      cellClass: 'w-full aspect-square rounded-[3px]',
+      colStyle: { flex: '1 1 0%', maxWidth: '16px', minWidth: '10px' },
+      gapClass: 'gap-1'
     },
     365: {
-      cellClass: 'w-2.5 h-2.5 rounded-[2px]',
-      gapClass: 'gap-1',
-      containerGapClass: 'gap-1',
-      cellWidth: '10px'
+      cellClass: 'w-full aspect-square rounded-[2px]',
+      colStyle: { flex: '1 1 0%', maxWidth: '11px', minWidth: '8px' },
+      gapClass: 'gap-1'
     }
   }[daysRange];
 
@@ -326,9 +322,13 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
           </div>
 
           <div className="flex flex-col gap-1.5 overflow-x-auto pb-2 custom-scrollbar">
-            <div className={`flex ${heatmapConfig.containerGapClass}`}>
+            <div className="flex justify-between w-full min-w-max pb-1">
               {columns.map((column, colIdx) => (
-                <div key={colIdx} className={`flex flex-col ${heatmapConfig.gapClass}`}>
+                <div 
+                  key={colIdx} 
+                  style={heatmapConfig.colStyle} 
+                  className={`flex flex-col ${heatmapConfig.gapClass}`}
+                >
                   {column.map((cell, cellIdx) => (
                     <div
                       key={cellIdx}
@@ -340,11 +340,11 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
               ))}
             </div>
             {/* 动态月份底部标识 */}
-            <div className={`flex ${heatmapConfig.containerGapClass} mt-2 select-none`}>
+            <div className="flex justify-between w-full min-w-max mt-2 select-none">
               {monthLabels.map((label, idx) => (
                 <div
                   key={idx}
-                  style={{ width: heatmapConfig.cellWidth }}
+                  style={heatmapConfig.colStyle}
                   className="text-[9px] font-bold text-on-surface-variant text-left overflow-visible whitespace-nowrap"
                 >
                   {label}
