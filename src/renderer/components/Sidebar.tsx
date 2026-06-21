@@ -251,12 +251,24 @@ export default function Sidebar({
   const renderProgressIcon = (videoPath: string) => {
     const prog = progressMap[videoPath];
     if (!prog) {
-      return <span className="material-symbols-outlined text-[16px] text-[#86868B] relative z-10 flex-shrink-0">play_circle</span>;
+      return (
+        <div className="w-6 h-6 flex items-center justify-center flex-shrink-0 relative z-10">
+          <span className="material-symbols-outlined text-[18px] text-[#86868B] leading-none">play_circle</span>
+        </div>
+      );
     }
     if (prog.isFinished) {
-      return <span className="material-symbols-outlined text-[16px] text-green-500 font-bold relative z-10 flex-shrink-0">check_circle</span>;
+      return (
+        <div className="w-6 h-6 flex items-center justify-center flex-shrink-0 relative z-10">
+          <span className="material-symbols-outlined text-[18px] text-green-500 font-bold leading-none">check_circle</span>
+        </div>
+      );
     }
-    return <span className="material-symbols-outlined text-[16px] text-primary relative z-10 flex-shrink-0">play_circle</span>;
+    return (
+      <div className="w-6 h-6 flex items-center justify-center flex-shrink-0 relative z-10">
+        <span className="material-symbols-outlined text-[18px] text-primary leading-none">play_circle</span>
+      </div>
+    );
   };
 
   // 递归渲染树形组件
