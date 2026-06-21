@@ -111,3 +111,61 @@ body {
   animation: float 3s ease-in-out infinite;
 }
 
+/* 优化覆盖 ArtPlayer 的进度条提示 */
+.art-progress-tip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  pointer-events: none !important;
+  overflow: visible !important;
+  transform: translateX(-50%) !important; /* 强制水平中心对齐鼠标 X 坐标 */
+}
+
+/* 进度条骨架屏动画 */
+@keyframes skeleton-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+.preview-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.12) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease infinite;
+}
+
+/* 进度条章节间隙样式 - Apple 高端微刻度设计风格 */
+.progress-gap-line {
+  position: absolute;
+  top: 25%; /* 垂直居中 */
+  height: 50%; /* 默认只占用中间一半高度，绝不通天，保持连贯性 */
+  width: 1.2px; /* 极其纤细精致 */
+  background-color: rgba(20, 20, 25, 0.4); /* 微弱的半透明凹槽阴影 */
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 10;
+  border-radius: 0.5px; /* 极小圆角 */
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* 当鼠标 hover 到进度条轨道时，分割线优雅弹性变长并加深，呈现分段节奏 */
+.art-progress:hover .progress-gap-line {
+  top: 15%;
+  height: 70%;
+  width: 1.8px;
+  background-color: rgba(0, 0, 0, 0.7); /* 融为播放器底色，形成有质感的高级断裂 */
+  border-radius: 1px;
+}
+

@@ -74,26 +74,44 @@ export class WebDAVClient {
   // 解析子路径为完整 URL，防止路径段（如 /dav）重复拼接
   resolveUrl(subPath: string): string {
     if (!subPath) return this.url;
+    
+    let targetPath = subPath;
+    let origin = '';
+    
     if (subPath.startsWith('http://') || subPath.startsWith('https://')) {
-      return subPath;
-    }
-    
-    let baseUriPath = '';
-    let origin = this.url;
-    try {
-      const u = new URL(this.url);
-      baseUriPath = u.pathname;
-      origin = u.origin;
-    } catch {}
-
-    const cleanBase = baseUriPath.endsWith('/') ? baseUriPath.slice(0, -1) : baseUriPath;
-    const cleanSub = subPath.startsWith('/') ? subPath : `/${subPath}`;
-    
-    if (cleanSub.startsWith(cleanBase)) {
-      return `${origin}${cleanSub}`;
+      try {
+        const u = new URL(subPath);
+        origin = u.origin;
+        targetPath = decodeURIComponent(u.pathname);
+      } catch {
+        return subPath;
+      }
     } else {
-      return `${origin}${cleanBase}${cleanSub}`;
+      let baseUriPath = '';
+      try {
+        const u = new URL(this.url);
+        baseUriPath = decodeURIComponent(u.pathname);
+        origin = u.origin;
+      } catch {
+        origin = this.url;
+      }
+      
+      const cleanBase = baseUriPath.endsWith('/') ? baseUriPath.slice(0, -1) : baseUriPath;
+      const cleanSub = subPath.startsWith('/') ? subPath : `/${subPath}`;
+      
+      if (cleanSub.startsWith(cleanBase)) {
+        targetPath = cleanSub;
+      } else {
+        targetPath = `${cleanBase}${cleanSub}`;
+      }
     }
+
+    const encodedPath = targetPath
+      .split('/')
+      .map(segment => encodeURIComponent(segment))
+      .join('/');
+
+    return `${origin}${encodedPath}`;
   }
 
   // 2. 浏览指定路径下的目录结构 (Depth: 1)

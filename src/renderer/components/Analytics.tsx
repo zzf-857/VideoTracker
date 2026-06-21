@@ -20,6 +20,9 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
   // 选中的年份（默认为今年）
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
+  // 联动时间轴选中的具体日期，默认显示当天
+  const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString());
+
   const getAvailableYears = () => {
     const years = new Set<number>();
     years.add(new Date().getFullYear());
@@ -224,21 +227,19 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
     containerGapClass: 'gap-1'
   };
 
-  // 整理所有历史日志时间轴数据
-  const getAllLogsSorted = () => {
-    const logs = [];
-    for (const [dateStr, log] of Object.entries(dailyLogs)) {
-      if (log.playedVideos.length > 0) {
-        logs.push({
-          dateStr,
-          ...log
-        });
-      }
+  // 获取当前选中日期的学习记录作为时间轴数据
+  const getSelectedDateLog = () => {
+    const log = dailyLogs[selectedDate];
+    if (log && log.playedVideos.length > 0) {
+      return [{
+        dateStr: selectedDate,
+        ...log
+      }];
     }
-    return logs.sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+    return [];
   };
 
-  const sortedLogs = getAllLogsSorted();
+  const displayLogs = getSelectedDateLog();
 
   const getWeeklyDaysLabel = () => {
     const labels = [];
@@ -387,17 +388,29 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                   style={heatmapConfig.colStyle}
                   className={`flex flex-col ${heatmapConfig.gapClass}`}
                 >
-                  {column.map((cell, cellIdx) => (
-                    <div
-                      key={cellIdx}
-                      className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-300 ${
-                        cell.isFuture 
-                          ? 'opacity-[0.2] pointer-events-none scale-[0.95]' 
-                          : 'opacity-100 hover:scale-110 hover:shadow-md'
-                      }`}
-                      title={cell.dateStr ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
-                    />
-                  ))}
+                  {column.map((cell, cellIdx) => {
+                    const isSelected = cell.dateStr === selectedDate;
+                    return (
+                      <div
+                        key={cellIdx}
+                        className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-200 ${
+                          cell.isFuture 
+                            ? 'opacity-[0.2] pointer-events-none scale-[0.95]' 
+                            : 'opacity-100 hover:scale-110 hover:shadow-md cursor-pointer'
+                        } ${
+                          isSelected 
+                            ? 'ring-2 ring-primary ring-offset-[1.5px] scale-105 z-10 shadow-sm shadow-primary/20' 
+                            : ''
+                        }`}
+                        title={cell.dateStr ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
+                        onClick={() => {
+                          if (cell.dateStr && !cell.isFuture) {
+                            setSelectedDate(cell.dateStr);
+                          }
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -577,73 +590,87 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
 
           {/* 右侧列：历史时间轴 */}
           <div className="col-span-12 lg:col-span-7 flex flex-col min-h-0">
-            <section className="apple-card flex flex-col rounded-2xl flex-1 overflow-hidden bg-white/80 border border-black/5 shadow-sm transition-shadow hover:shadow-md">
-              <div className="p-4 border-b border-black/5">
+            <section className="apple-card flex flex-col rounded-2xl flex-1 overflow-hidden bg-white/80 border border-black/5 shadow-sm transition-shadow hover:shadow-md h-[400px] lg:h-[438px]">
+              <div className="p-4 border-b border-black/5 flex justify-between items-center bg-black/[0.01]">
                 <h3 className="font-bold text-sm text-on-surface">学习历史时间轴</h3>
+                <div className="flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-bold shadow-xs">
+                  <span className="material-symbols-outlined text-[12px]">calendar_today</span>
+                  <span>{selectedDate}</span>
+                </div>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-6">
-                {sortedLogs.map((log, idx) => (
-                  <div key={idx} className="flex gap-4 relative select-none">
-                    {/* 左侧垂直线和小圆点 */}
-                    <div className="flex flex-col items-center">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center border border-primary/10">
-                        <span className="material-symbols-outlined text-[16px]">play_circle</span>
-                      </div>
-                      {idx < sortedLogs.length - 1 && <div className="w-px flex-1 bg-black/5 my-2" />}
-                    </div>
-                    
-                    {/* 右侧日志卡片 */}
-                    <div className="flex-1 pb-4 border-b border-black/[0.02]">
-                      <div className="flex justify-between items-start mb-1">
-                        <h4 className="font-bold text-xs text-on-surface">
-                          在该日期学习了 {formatValue(log.totalDuration)} {getUnitLabel()}
-                        </h4>
-                        <span className="text-[10px] font-semibold text-on-surface-variant">{log.dateStr}</span>
+              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-6 flex flex-col">
+                {displayLogs.length > 0 ? (
+                  displayLogs.map((log, idx) => (
+                    <div key={idx} className="flex gap-4 relative select-none">
+                      {/* 左侧小圆点 */}
+                      <div className="flex flex-col items-center">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center border border-primary/10">
+                          <span className="material-symbols-outlined text-[16px]">play_circle</span>
+                        </div>
+                        {idx < displayLogs.length - 1 && <div className="w-px flex-1 bg-black/5 my-2" />}
                       </div>
                       
-                      <div className="space-y-1.5 mt-2">
-                        {log.playedVideos.map((video, vIdx) => {
-                          const isSelected = contextMenu && contextMenu.dateStr === log.dateStr && contextMenu.videoPath === video.path;
-                          return (
-                            <div 
-                              key={vIdx} 
-                              onContextMenu={(e) => handleContextMenu(e, log.dateStr, video.path)}
-                              className={`text-xs flex items-center justify-between pl-2 border-l-2 py-1.5 transition-all duration-200 cursor-default rounded group ${
-                                isSelected 
-                                  ? 'bg-primary/10 border-primary text-primary font-semibold translate-x-1 shadow-xs' 
-                                  : 'text-on-surface-variant border-transparent hover:border-primary/60 hover:bg-primary/5 hover:text-on-surface hover:translate-x-1 hover:shadow-xs'
-                              }`}
-                              title="右键可删除该记录"
-                            >
-                              <div className="flex flex-col min-w-0 pr-4">
-                                <span className={`truncate font-medium transition-colors duration-200 ${
-                                  isSelected ? 'text-primary' : 'text-on-surface group-hover:text-primary'
-                                }`}>
-                                  {video.name}
-                                </span>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-[9px] opacity-70">时间: {video.time}</span>
-                                  <span className="text-[9px] text-primary/70 bg-primary/5 px-1 py-0.2 rounded font-medium">
-                                    来源: {getSourceLabel(video)}
+                      {/* 右侧日志卡片 */}
+                      <div className="flex-1 pb-4 border-b border-black/[0.02]">
+                        <div className="flex justify-between items-start mb-1">
+                          <h4 className="font-bold text-xs text-on-surface">
+                            在该日期学习了 {formatValue(log.totalDuration)} {getUnitLabel()}
+                          </h4>
+                          <span className="text-[10px] font-semibold text-on-surface-variant">{log.dateStr}</span>
+                        </div>
+                        
+                        <div className="space-y-1.5 mt-2">
+                          {log.playedVideos.map((video, vIdx) => {
+                            const isSelected = contextMenu && contextMenu.dateStr === log.dateStr && contextMenu.videoPath === video.path;
+                            return (
+                              <div 
+                                key={vIdx} 
+                                onContextMenu={(e) => handleContextMenu(e, log.dateStr, video.path)}
+                                className={`text-xs flex items-center justify-between pl-2 border-l-2 py-1.5 transition-all duration-200 cursor-default rounded group ${
+                                  isSelected 
+                                    ? 'bg-primary/10 border-primary text-primary font-semibold translate-x-1 shadow-xs' 
+                                    : 'text-on-surface-variant border-transparent hover:border-primary/60 hover:bg-primary/5 hover:text-on-surface hover:translate-x-1 hover:shadow-xs'
+                                }`}
+                                title="右键可删除该记录"
+                              >
+                                <div className="flex flex-col min-w-0 pr-4">
+                                  <span className={`truncate font-medium transition-colors duration-200 ${
+                                    isSelected ? 'text-primary' : 'text-on-surface group-hover:text-primary'
+                                  }`}>
+                                    {video.name}
                                   </span>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[9px] opacity-70">时间: {video.time}</span>
+                                    <span className="text-[9px] text-primary/70 bg-primary/5 px-1 py-0.2 rounded font-medium">
+                                      来源: {getSourceLabel(video)}
+                                    </span>
+                                  </div>
                                 </div>
+                                <span className="font-bold text-primary whitespace-nowrap bg-primary/5 px-1.5 py-0.5 rounded">
+                                  +{formatValue(video.duration)} {getUnitLabel()}
+                                </span>
                               </div>
-                              <span className="font-bold text-primary whitespace-nowrap bg-primary/5 px-1.5 py-0.5 rounded">
-                                +{formatValue(video.duration)} {getUnitLabel()}
-                              </span>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-
-                {sortedLogs.length === 0 && (
-                  <div className="h-full flex flex-col items-center justify-center text-center opacity-60 py-20">
-                    <span className="material-symbols-outlined text-4xl text-on-surface-variant mb-2">timeline</span>
-                    <span className="text-xs text-on-surface-variant">暂无播放足迹历史记录</span>
+                  ))
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center py-10 select-none opacity-85">
+                    <div className="w-16 h-16 rounded-full bg-black/[0.03] text-on-surface-variant/40 flex items-center justify-center mb-3 border border-black/[0.02]">
+                      <span className="material-symbols-outlined text-[28px] animate-pulse">coffee</span>
+                    </div>
+                    <h4 className="font-bold text-xs text-on-surface">暂无专注记录</h4>
+                    <p className="text-[10px] text-on-surface-variant mt-1.5 max-w-[200px] leading-relaxed">
+                      {selectedDate === getLocalDateString() 
+                        ? '今天还没有专注学习哦。快去播放视频，开始您的打卡之旅吧！' 
+                        : `${selectedDate} 这一天没有留下专注印记。`}
+                    </p>
+                    <span className="text-[9px] text-primary/80 bg-primary/5 px-2.5 py-0.5 rounded-md mt-4 font-semibold border border-primary/10">
+                      提示：点击上方热力图点可快速切换日期
+                    </span>
                   </div>
                 )}
               </div>

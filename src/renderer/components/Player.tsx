@@ -107,13 +107,7 @@ export default function Player({
         
         const gap = document.createElement('div');
         gap.className = 'progress-gap-line';
-        gap.style.position = 'absolute';
         gap.style.left = `${pct}%`;
-        gap.style.top = '0';
-        gap.style.bottom = '0';
-        gap.style.width = '2px';
-        gap.style.backgroundColor = '#000000'; // 用播放器背景色切断
-        gap.style.transform = 'translateX(-50%)';
         
         gapContainer.appendChild(gap);
       });
@@ -136,62 +130,208 @@ export default function Player({
       return activeCh;
     };
 
+    // 初始化按需截帧的后台 Video
+    const hiddenVideo = document.createElement('video');
+    hiddenVideo.muted = true;
+    hiddenVideo.crossOrigin = 'anonymous';
+    hiddenVideo.style.display = 'none';
+
+    // 内存帧缓存 Map
+    const thumbnailCache = new Map<number, string>();
+
+    // 截帧控制变量
+    let isSeeking = false;
+    let nextSeekTime: number | null = null;
+    let currentHoverKey: number | null = null;
+    let debounceTimer: NodeJS.Timeout | null = null;
+
+    const updatePreviewImage = (imgUrl: string) => {
+      const thumbContainer = tipEl.querySelector('.custom-tip-thumb-box') as HTMLElement;
+      if (thumbContainer) {
+        const imgWrapper = thumbContainer.querySelector('.preview-image-wrapper') as HTMLElement;
+        if (imgWrapper) {
+          imgWrapper.className = 'preview-image-wrapper'; // 移除 skeleton 样式
+          imgWrapper.style.background = '#000';
+          imgWrapper.innerHTML = `<img src="${imgUrl}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />`;
+        }
+      }
+    };
+
+    const performSeek = (time: number) => {
+      if (isSeeking) {
+        nextSeekTime = time;
+        return;
+      }
+      isSeeking = true;
+      hiddenVideo.currentTime = time;
+    };
+
+    const handleHiddenVideoSeeked = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 180;
+        canvas.height = 101;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          
+          const roundedTime = Math.round(hiddenVideo.currentTime);
+          thumbnailCache.set(roundedTime, dataUrl);
+          
+          if (currentHoverKey === roundedTime) {
+            updatePreviewImage(dataUrl);
+          }
+        }
+      } catch (err) {
+        console.error('Error drawing frame to canvas:', err);
+      } finally {
+        isSeeking = false;
+        if (nextSeekTime !== null) {
+          const timeToSeek = nextSeekTime;
+          nextSeekTime = null;
+          performSeek(timeToSeek);
+        }
+      }
+    };
+
+    hiddenVideo.addEventListener('seeked', handleHiddenVideoSeeked);
+
     let handleMouseMove: ((e: MouseEvent) => void) | null = null;
     let handleMouseLeave: (() => void) | null = null;
+    let handleMouseEnter: (() => void) | null = null;
 
     if (progressEl && tipEl) {
+      handleMouseEnter = () => {
+        if (!hiddenVideo.src) {
+          hiddenVideo.src = videoUrl;
+          hiddenVideo.load();
+        }
+      };
+
       handleMouseMove = (e: MouseEvent) => {
-        if (!activeChapters || activeChapters.length === 0 || art.duration <= 0) return;
+        if (art.duration <= 0) return;
         
         const rect = progressEl.getBoundingClientRect();
         const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
         const hoverTime = pct * art.duration;
+        const cacheKey = Math.round(hoverTime);
         
+        currentHoverKey = cacheKey;
+
+        // 清除 ArtPlayer 原生写入的时间文本节点以防混淆
+        Array.from(tipEl.childNodes).forEach(node => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            node.textContent = '';
+          }
+        });
+
+        // 格式化时间字符串
+        const formatTimeStr = (secs: number) => {
+          const h = Math.floor(secs / 3600);
+          const m = Math.floor((secs % 3600) / 60);
+          const s = Math.floor(secs % 60);
+          if (h > 0) {
+            return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+          }
+          return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        };
+        const timeText = formatTimeStr(hoverTime);
+
+        // 获取当前时间点的章节
         const ch = getChapterAtTime(hoverTime);
-        if (!ch) return;
 
-        let streamOrigin = '';
-        try {
-          streamOrigin = new URL(videoUrl).origin;
-        } catch (err) {}
-
-        const thumbUrl = streamOrigin
-          ? `${streamOrigin}/thumbnail?videoPath=${encodeURIComponent(videoPath)}&time=${ch.time}`
-          : '';
-
+        // 创建自定义的预览容器
         let thumbContainer = tipEl.querySelector('.custom-tip-thumb-box') as HTMLElement;
         if (!thumbContainer) {
           thumbContainer = document.createElement('div');
           thumbContainer.className = 'custom-tip-thumb-box';
+          thumbContainer.style.position = 'absolute';
+          thumbContainer.style.bottom = '-12px';
+          thumbContainer.style.left = '50%';
+          thumbContainer.style.transform = 'translateX(-50%)';
           thumbContainer.style.display = 'flex';
           thumbContainer.style.flexDirection = 'column';
           thumbContainer.style.alignItems = 'center';
-          thumbContainer.style.gap = '4px';
-          thumbContainer.style.marginBottom = '6px';
-          thumbContainer.style.padding = '2px';
-          thumbContainer.style.backgroundColor = 'rgba(0,0,0,0.85)';
-          thumbContainer.style.borderRadius = '8px';
+          thumbContainer.style.padding = '6px';
+          thumbContainer.style.background = 'rgba(20, 20, 25, 0.85)';
+          thumbContainer.style.backdropFilter = 'blur(12px)';
+          thumbContainer.style.webkitBackdropFilter = 'blur(12px)';
+          thumbContainer.style.borderRadius = '12px';
           thumbContainer.style.overflow = 'hidden';
-          thumbContainer.style.border = '1px solid rgba(255,255,255,0.15)';
+          thumbContainer.style.border = '1px solid rgba(255,255,255,0.12)';
+          thumbContainer.style.boxShadow = '0 8px 32px 0 rgba(0, 0, 0, 0.4)';
           
           tipEl.insertBefore(thumbContainer, tipEl.firstChild);
         }
 
-        thumbContainer.innerHTML = `
-          <img src="${thumbUrl}" style="width: 120px; height: 68px; object-fit: cover; border-radius: 6px; display: block;" onerror="this.style.display='none'" />
-          <div style="font-size: 9px; color: #fff; max-width: 120px; text-align: center; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 4px 0 4px; line-height: 1.2;">
-            ${ch.text}
-          </div>
-        `;
+        const chapterHtml = ch 
+          ? `<div style="font-size: 10px; color: #0071E3; font-weight: bold; background: rgba(0,113,227,0.12); padding: 2px 8px; border-radius: 6px; margin-bottom: 4px; max-width: 168px; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+              ${ch.text}
+             </div>`
+          : '';
+
+        const hasCached = thumbnailCache.has(cacheKey);
+
+        if (hasCached) {
+          const imgUrl = thumbnailCache.get(cacheKey)!;
+          thumbContainer.innerHTML = `
+            <div class="preview-image-wrapper" style="width: 180px; height: 101px; border-radius: 8px; overflow: hidden; position: relative; background: #000;">
+              <img src="${imgUrl}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+            </div>
+            <div style="margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+              ${chapterHtml}
+              <div style="font-size: 11px; color: #fff; font-weight: 700; font-family: monospace; letter-spacing: 0.5px;">${timeText}</div>
+            </div>
+          `;
+        } else {
+          // 如果没有当前缓存，尝试保留展示上一张图，但在上方加上骨架屏遮罩；若没有图，显示空骨架屏
+          const lastImgElement = thumbContainer.querySelector('img') as HTMLImageElement;
+          const lastSrc = lastImgElement ? lastImgElement.src : '';
+
+          if (lastSrc) {
+            thumbContainer.innerHTML = `
+              <div class="preview-image-wrapper" style="width: 180px; height: 101px; border-radius: 8px; overflow: hidden; position: relative; background: #000;">
+                <img src="${lastSrc}" style="width: 100%; height: 100%; object-fit: cover; display: block; filter: brightness(0.6);" />
+                <div class="preview-skeleton" style="position: absolute; inset: 0; opacity: 0.35;"></div>
+              </div>
+              <div style="margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                ${chapterHtml}
+                <div style="font-size: 11px; color: #fff; font-weight: 700; font-family: monospace; letter-spacing: 0.5px;">${timeText}</div>
+              </div>
+            `;
+          } else {
+            thumbContainer.innerHTML = `
+              <div class="preview-image-wrapper preview-skeleton" style="width: 180px; height: 101px; border-radius: 8px; overflow: hidden; position: relative; background: rgba(255,255,255,0.08);">
+              </div>
+              <div style="margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                ${chapterHtml}
+                <div style="font-size: 11px; color: #fff; font-weight: 700; font-family: monospace; letter-spacing: 0.5px;">${timeText}</div>
+              </div>
+            `;
+          }
+
+          // 触发防抖 seek
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            if (!hiddenVideo.src) {
+              hiddenVideo.src = videoUrl;
+              hiddenVideo.load();
+            }
+            performSeek(hoverTime);
+          }, 150);
+        }
       };
 
       handleMouseLeave = () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
         const thumbContainer = tipEl.querySelector('.custom-tip-thumb-box') as HTMLElement;
         if (thumbContainer) {
           thumbContainer.remove();
         }
       };
 
+      progressEl.addEventListener('mouseenter', handleMouseEnter);
       progressEl.addEventListener('mousemove', handleMouseMove);
       progressEl.addEventListener('mouseleave', handleMouseLeave);
     }
@@ -279,6 +419,18 @@ export default function Player({
       if (handleMouseLeave && progressEl) {
         progressEl.removeEventListener('mouseleave', handleMouseLeave);
       }
+      if (handleMouseEnter && progressEl) {
+        progressEl.removeEventListener('mouseenter', handleMouseEnter);
+      }
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      hiddenVideo.removeEventListener('seeked', handleHiddenVideoSeeked);
+      hiddenVideo.src = '';
+      try {
+        hiddenVideo.load();
+      } catch (e) {}
+      
       if (art) {
         art.destroy(true);
       }
