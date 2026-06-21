@@ -1,11 +1,11 @@
 @echo off
-title VideoTracker 启动器 (开发调试)
+title VideoTracker Launcher
 echo ===================================================
-echo   正在配置国内镜像源并拉起 VideoTracker...
+echo   Configuring Electron Mirror and Launching App...
 echo ===================================================
 set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 call npm run dev
 echo ===================================================
-echo   启动进程已退出，请检查上方是否有报错信息。
+echo   Process exited. Please check any errors above.
 echo ===================================================
 pause
