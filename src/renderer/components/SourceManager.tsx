@@ -28,6 +28,32 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
   const [browserLoading, setBrowserLoading] = useState(false);
   const [selectedPath, setSelectedPath] = useState('');
 
+  // 编辑挂载源名称状态
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+
+  const startEditing = (id: string, name: string) => {
+    setEditingId(id);
+    setEditingName(name);
+  };
+
+  const handleSaveEditedName = async (id: string) => {
+    if (!editingName.trim()) {
+      alert('请输入数据源名称');
+      return;
+    }
+    const data = await storageService.loadData();
+    const updatedSources = data.sources.map(s => {
+      if (s.id === id) {
+        return { ...s, name: editingName.trim() };
+      }
+      return s;
+    });
+    await storageService.saveData({ sources: updatedSources });
+    setEditingId(null);
+    onRefresh();
+  };
+
   useEffect(() => {
     storageService.loadData().then(data => {
       setSources(data.sources);
@@ -229,21 +255,48 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
                   </span>
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-on-surface">{source.name}</h3>
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider bg-black/5 px-2 py-0.5 rounded-md">
+                  {editingId === source.id ? (
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onBlur={() => handleSaveEditedName(source.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSaveEditedName(source.id);
+                        } else if (e.key === 'Escape') {
+                          setEditingId(null);
+                        }
+                      }}
+                      autoFocus
+                      className="font-bold text-xs text-on-surface bg-black/[0.04] border border-black/10 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary w-full max-w-[200px]"
+                    />
+                  ) : (
+                    <h3 className="font-bold text-sm text-on-surface">{source.name}</h3>
+                  )}
+                  <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider bg-black/5 px-2 py-0.5 rounded-md mt-1 inline-block">
                     {source.type === 'local' ? '本地目录' : source.type === 'alist' ? 'Alist 挂载' : 'WebDAV 挂载'}
                   </span>
                 </div>
               </div>
 
-              {/* 删除按钮 */}
-              <button
-                onClick={() => handleDeleteSource(source.id)}
-                className="opacity-0 group-hover:opacity-100 w-8 h-8 rounded-full hover:bg-red-50 text-red-500 flex items-center justify-center transition-all"
-                title="删除挂载源"
-              >
-                <span className="material-symbols-outlined text-[18px]">delete</span>
-              </button>
+              {/* 操作按钮组 */}
+              <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+                <button
+                  onClick={() => startEditing(source.id, source.name)}
+                  className="w-8 h-8 rounded-full hover:bg-black/[0.04] text-on-surface-variant flex items-center justify-center transition-all cursor-pointer"
+                  title="修改名称"
+                >
+                  <span className="material-symbols-outlined text-[16px]">edit</span>
+                </button>
+                <button
+                  onClick={() => handleDeleteSource(source.id)}
+                  className="w-8 h-8 rounded-full hover:bg-red-50 text-red-500 flex items-center justify-center transition-all cursor-pointer"
+                  title="删除挂载源"
+                >
+                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+              </div>
             </div>
 
             <div className="mt-2 text-xs font-mono text-on-surface-variant truncate bg-black/[0.02] p-2 rounded-lg border border-black/5">

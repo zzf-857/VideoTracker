@@ -234,7 +234,7 @@ export default function App() {
     isPlaying: isPlaying,
     idleTimeoutMinutes: appData?.settings.idleTimeout || 15,
     onIdleTimeout: handleIdleTimeout,
-    sourceName: currentSource?.name || '本地'
+    sourceName: currentSource?.name
   });
 
   // 维护一个运行期间时长获取失败的视频路径列表，避免无限重复重试

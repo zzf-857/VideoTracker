@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { storageService, DailyLog, PlayedVideoLog } from '../services/storage';
+import { storageService, DailyLog, PlayedVideoLog, MediaSourceConfig } from '../services/storage';
 
 interface LogCalendarProps {
   refreshSignal: number;
@@ -10,14 +10,16 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
   const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLog>>({});
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [streakDays, setStreakDays] = useState(0);
+  const [sources, setSources] = useState<MediaSourceConfig[]>([]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; dateStr: string; videoPath: string } | null>(null);
 
   useEffect(() => {
     storageService.loadData().then(data => {
       setDailyLogs(data.dailyLogs);
+      setSources(data.sources);
       
       const today = new Date().toISOString().split('T')[0];
-      setSelectedDate(today);
+      setSelectedDate(prev => prev || today);
       
       // 计算连续学习天数
       calculateStreak(data.dailyLogs);
@@ -108,7 +110,37 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
 
   // 获取视频来源文案
   const getSourceLabel = (video: PlayedVideoLog) => {
-    if (video.sourceName) return video.sourceName;
+    // 1. 尝试使用已保存的 sourceName (排除默认的 "本地" / "本地源" 占位符)
+    if (video.sourceName && video.sourceName !== '本地' && video.sourceName !== '本地源') {
+      return video.sourceName;
+    }
+
+    // 2. 动态从已注册的数据源中进行路径前缀匹配
+    const normPath = video.path.replace(/\\/g, '/').toLowerCase();
+    for (const source of sources) {
+      if (source.type === 'local') {
+        const normSourcePath = source.path.replace(/\\/g, '/').toLowerCase();
+        if (normPath.startsWith(normSourcePath)) {
+          return source.name;
+        }
+      } else {
+        // 对于 webdav 和 alist，匹配其 URL 的 pathname 部分
+        try {
+          const url = new URL(source.path);
+          let pathname = url.pathname;
+          if (pathname.endsWith('/')) pathname = pathname.slice(0, -1);
+          if (pathname && normPath.startsWith(pathname.toLowerCase())) {
+            return source.name;
+          }
+        } catch (e) {
+          if (normPath.includes(source.name.toLowerCase())) {
+            return source.name;
+          }
+        }
+      }
+    }
+
+    // 3. 兜底逻辑
     if (video.path.startsWith('http://') || video.path.startsWith('https://')) {
       return '网络源';
     }
@@ -230,6 +262,7 @@ export default function LogCalendar({ refreshSignal, onRefresh }: LogCalendarPro
         <div 
           className="fixed bg-white border border-black/10 rounded-xl shadow-lg py-1 z-[200] min-w-28 text-xs text-red-500 animate-fade-in"
           style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
           onMouseLeave={() => setContextMenu(null)}
         >
           <button 
