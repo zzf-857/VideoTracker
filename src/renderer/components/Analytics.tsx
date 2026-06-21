@@ -108,11 +108,11 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
       const log = dailyLogs[dateStr];
       const duration = log ? log.totalDuration : 0;
 
-      let bgClass = 'bg-black/5';
+      let bgClass = 'bg-black/[0.08]';
       if (duration > 3600 * 2) bgClass = 'bg-primary'; // >2h
-      else if (duration > 3600) bgClass = 'bg-primary/70'; // >1h
-      else if (duration > 1800) bgClass = 'bg-primary/40'; // >30m
-      else if (duration > 0) bgClass = 'bg-primary/20'; // >0m
+      else if (duration > 3600) bgClass = 'bg-primary/80'; // >1h
+      else if (duration > 1800) bgClass = 'bg-primary/55'; // >30m
+      else if (duration > 0) bgClass = 'bg-primary/30'; // >0m
 
       grid.push({
         dateStr,
@@ -155,7 +155,7 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
       const validCell = col.find(c => c.dateStr !== '');
       if (!validCell) return { label: '', isDim: true };
       const date = new Date(validCell.dateStr);
-      const mName = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+      const mName = `${date.getMonth() + 1}月`;
       const hasActiveCell = col.some(c => c.dateStr !== '' && c.daysAgo < daysRange);
       if (mName !== lastMonth) {
         lastMonth = mName;
@@ -320,10 +320,10 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
               <div className="flex items-center gap-2 text-[10px] font-bold text-on-surface-variant uppercase">
                 <span>少</span>
                 <div className="flex gap-0.5">
-                  <div className="w-2.5 h-2.5 bg-black/5 rounded-sm" />
-                  <div className="w-2.5 h-2.5 bg-primary/20 rounded-sm" />
-                  <div className="w-2.5 h-2.5 bg-primary/40 rounded-sm" />
-                  <div className="w-2.5 h-2.5 bg-primary/70 rounded-sm" />
+                  <div className="w-2.5 h-2.5 bg-black/[0.08] rounded-sm" />
+                  <div className="w-2.5 h-2.5 bg-primary/30 rounded-sm" />
+                  <div className="w-2.5 h-2.5 bg-primary/55 rounded-sm" />
+                  <div className="w-2.5 h-2.5 bg-primary/80 rounded-sm" />
                   <div className="w-2.5 h-2.5 bg-primary rounded-sm" />
                 </div>
                 <span>多</span>
@@ -346,8 +346,8 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                       className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-300 ${
                         cell.daysAgo >= daysRange 
                           ? (cell.duration > 0 
-                              ? 'opacity-[0.25] pointer-events-none scale-[0.95] saturate-[0.5]' 
-                              : 'opacity-[0.5] pointer-events-none scale-[0.95]')
+                              ? 'opacity-[0.15] pointer-events-none scale-[0.95] saturate-[0.2]' 
+                              : 'opacity-[0.25] pointer-events-none scale-[0.95]')
                           : 'opacity-100'
                       }`}
                       title={cell.dateStr && cell.daysAgo < daysRange ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
