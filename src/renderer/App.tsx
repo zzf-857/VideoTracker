@@ -489,6 +489,17 @@ export default function App() {
       <main className="flex-1 flex flex-col relative h-full overflow-hidden">
         {currentTab === 'dashboard' ? (
           <div className="flex-1 p-8 flex flex-col gap-5 h-full overflow-hidden">
+            {/* 计划计算面板 (移动到上方，避免下拉框被屏幕裁剪) */}
+            <Dashboard
+              currentSource={currentSource}
+              videoCount={stats.totalCount}
+              playedVideoCount={stats.finishedCount}
+              totalLocalDuration={stats.totalDuration}
+              playedLocalDuration={stats.finishedDuration}
+              refreshSignal={refreshSignal}
+            />
+
+            {/* 主要播放与占位区域 */}
             <div className="flex-1 min-h-[300px] relative bg-black rounded-2xl overflow-hidden shadow-lg border border-black/5">
               {activeVideoUrl ? (
                 <Player
@@ -519,16 +530,6 @@ export default function App() {
                 </div>
               )}
             </div>
-
-            {/* 底部计划计算面板 */}
-            <Dashboard
-              currentSource={currentSource}
-              videoCount={stats.totalCount}
-              playedVideoCount={stats.finishedCount}
-              totalLocalDuration={stats.totalDuration}
-              playedLocalDuration={stats.finishedDuration}
-              refreshSignal={refreshSignal}
-            />
           </div>
         ) : currentTab === 'sources' ? (
           <SourceManager refreshSignal={refreshSignal} onRefresh={handleRefresh} />
