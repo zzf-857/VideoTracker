@@ -303,10 +303,12 @@ export default function App() {
         const lastVid = data.lastPlayedVideo;
         let matchingSource = data.sources.find(s => s.id === lastVid.sourceId);
         
-        // 健壮防错：如果匹配的 sourceId 不匹配视频文件的绝对路径（比如之前的 Bug 导致写错了关联 ID）
-        // 则采用本地路径前缀匹配规则自动纠正为正确的媒体源
-        if (!matchingSource || (matchingSource.type === 'local' && !lastVid.path.startsWith(matchingSource.path))) {
-          const pathMatched = data.sources.find(s => s.type === 'local' && lastVid.path.startsWith(s.path));
+        // 健壮防错：统一转换为小写与正斜杠进行比对，防止 Windows 下盘符大小写或反斜杠带来的字符比对不一致问题
+        const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+        const normVidPath = normalizePath(lastVid.path);
+        
+        if (!matchingSource || (matchingSource.type === 'local' && !normVidPath.startsWith(normalizePath(matchingSource.path)))) {
+          const pathMatched = data.sources.find(s => s.type === 'local' && normVidPath.startsWith(normalizePath(s.path)));
           if (pathMatched) {
             matchingSource = pathMatched;
           }
