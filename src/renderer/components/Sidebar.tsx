@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { storageService, MediaSourceConfig, VideoProgress } from '../services/storage';
 import { WebDAVClient, WebDAVFile } from '../services/webdav';
+import CustomSelect from './CustomSelect';
 
 interface SidebarProps {
   currentTab: string;
@@ -10,6 +11,7 @@ interface SidebarProps {
   progressMap: Record<string, VideoProgress>;
   refreshSignal: number;
   onCollapse: () => void;
+  onRefresh?: () => void;
 
   sources: MediaSourceConfig[];
   currentSource: MediaSourceConfig | null;
@@ -37,6 +39,7 @@ export default function Sidebar({
   progressMap,
   refreshSignal,
   onCollapse,
+  onRefresh,
 
   sources,
   currentSource,
@@ -46,6 +49,62 @@ export default function Sidebar({
   isLoading
 }: SidebarProps) {
   const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    videoPath: string;
+    videoName: string;
+    isFinished: boolean;
+    duration?: number;
+  }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    videoPath: '',
+    videoName: '',
+    isFinished: false
+  });
+
+  // 监听全局点击以关闭右键菜单
+  useEffect(() => {
+    const handleCloseMenu = () => {
+      if (contextMenu.visible) {
+        setContextMenu(prev => ({ ...prev, visible: false }));
+      }
+    };
+    window.addEventListener('click', handleCloseMenu);
+    return () => window.removeEventListener('click', handleCloseMenu);
+  }, [contextMenu.visible]);
+
+  // 手动切换完成状态
+  const handleToggleFinishedStatus = async (
+    videoPath: string,
+    videoName: string,
+    isFinished: boolean,
+    duration?: number
+  ) => {
+    const finalDuration = duration && duration > 0 ? duration : 1800;
+    if (isFinished) {
+      // 标记为未完成：进度归零
+      await storageService.saveVideoProgress(videoPath, {
+        currentTime: 0,
+        duration: finalDuration,
+        isFinished: false
+      });
+    } else {
+      // 标记为已完成：进度设为 100%
+      await storageService.saveVideoProgress(videoPath, {
+        currentTime: finalDuration,
+        duration: finalDuration,
+        isFinished: true
+      });
+    }
+    // 触发更新
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
 
   // 平铺视图与排序状态 (PotPlayer 风格)
   const [viewMode, setViewMode] = useState<'tree' | 'flat'>('tree');
@@ -307,12 +366,26 @@ export default function Sidebar({
         const durStr = prog?.duration ? ` · ${formatDuration(prog.duration)}` : '';
         const metaStr = `${formatSize(node.size)}${durStr}`;
 
+        const isFinished = prog?.isFinished || false;
         return (
           <div
             key={node.path}
             style={{ paddingLeft: `${depth * 12 + 20}px` }}
             onClick={() => handlePlayVideo(node)}
-            className={`relative flex items-center gap-2.5 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setContextMenu({
+                visible: true,
+                x: e.clientX,
+                y: e.clientY,
+                videoPath: node.path,
+                videoName: node.name,
+                isFinished,
+                duration: prog?.duration
+              });
+            }}
+            className={`relative flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
               isSelected ? 'bg-primary/10 text-primary font-semibold' : 'text-on-surface hover:bg-black/[0.03]'
             }`}
           >
@@ -323,10 +396,22 @@ export default function Sidebar({
               />
             )}
             
+            {/* 绿点表示已学完 */}
+            {isFinished && (
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0 relative z-10 animate-pulse" />
+            )}
+
             {renderProgressIcon(node.path)}
             
             <div className="relative z-10 flex-1 min-w-0 flex flex-col gap-0.5">
-              <span className="text-sm truncate w-full" title={node.name}>{node.name}</span>
+              <div className="flex items-center justify-between gap-1.5 w-full">
+                <span className="text-sm truncate" title={node.name}>{node.name}</span>
+                {isFinished && (
+                  <span className="text-[9px] px-1 py-0.2 rounded bg-green-500/10 text-green-600 font-bold flex-shrink-0">
+                    已学完
+                  </span>
+                )}
+              </div>
               {metaStr && (
                 <div className="text-[9px] text-on-surface-variant/50 font-mono">
                   {metaStr}
@@ -340,213 +425,268 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="w-full flex flex-col bg-white/80 backdrop-blur-xl border-r border-black/5 h-full overflow-hidden select-none">
-      {/* 顶部 Logo 与系统标头 */}
-      <div className="p-5 border-b border-black/5 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-headline font-extrabold tracking-tight text-on-surface">VideoTracker</h1>
-          <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider mt-0.5 opacity-70">
-            学习跟踪仪表盘
-          </p>
-        </div>
-        
-        {/* 收起侧边栏按钮 */}
-        <button
-          onClick={onCollapse}
-          className="w-8 h-8 rounded-xl text-on-surface-variant hover:bg-black/[0.04] hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
-          title="收起侧边栏"
-        >
-          <span className="material-symbols-outlined text-[18px]">menu</span>
-        </button>
-      </div>
-
-      {/* 选项卡导航 */}
-      <nav className="p-4 space-y-1">
-        <button
-          onClick={() => setCurrentTab('dashboard')}
-          className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl transition-all ${
-            currentTab === 'dashboard'
-              ? 'bg-primary text-white font-semibold shadow-sm shadow-primary/20'
-              : 'text-on-surface-variant hover:bg-black/[0.03] hover:text-on-surface'
-          }`}
-        >
-          <span className="material-symbols-outlined text-[20px]">dashboard</span>
-          <span className="text-sm font-medium">学习主台</span>
-        </button>
-        <button
-          onClick={() => setCurrentTab('sources')}
-          className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl transition-all ${
-            currentTab === 'sources'
-              ? 'bg-primary text-white font-semibold shadow-sm shadow-primary/20'
-              : 'text-on-surface-variant hover:bg-black/[0.03] hover:text-on-surface'
-          }`}
-        >
-          <span className="material-symbols-outlined text-[20px]">cloud</span>
-          <span className="text-sm font-medium">挂载源管理</span>
-        </button>
-        <button
-          onClick={() => setCurrentTab('analytics')}
-          className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl transition-all ${
-            currentTab === 'analytics'
-              ? 'bg-primary text-white font-semibold shadow-sm shadow-primary/20'
-              : 'text-on-surface-variant hover:bg-black/[0.03] hover:text-on-surface'
-          }`}
-        >
-          <span className="material-symbols-outlined text-[20px]">analytics</span>
-          <span className="text-sm font-medium">数据大屏</span>
-        </button>
-        <button
-          onClick={() => setCurrentTab('settings')}
-          className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl transition-all ${
-            currentTab === 'settings'
-              ? 'bg-primary text-white font-semibold shadow-sm shadow-primary/20'
-              : 'text-on-surface-variant hover:bg-black/[0.03] hover:text-on-surface'
-          }`}
-        >
-          <span className="material-symbols-outlined text-[20px]">settings</span>
-          <span className="text-sm font-medium">系统设置</span>
-        </button>
-      </nav>
-
-      {/* 仅在仪表盘模式下展示侧边栏大纲目录 */}
-      {currentTab === 'dashboard' && (
-        <div className="flex-1 flex flex-col overflow-hidden border-t border-black/5 mt-2">
-          {/* 数据源选择器 */}
-          <div className="px-4 py-3 flex items-center justify-between bg-black/[0.01] border-b border-black/5">
-            <select
-              value={currentSource ? currentSource.id : ''}
-              onChange={(e) => setCurrentSource(sources.find(s => s.id === e.target.value) || null)}
-              className="bg-transparent border-none text-xs font-semibold focus:ring-0 text-on-surface cursor-pointer p-0 pr-6 w-full"
-            >
-              {sources.map(s => (
-                <option key={s.id} value={s.id} className="text-on-surface bg-white">
-                  {s.name} ({s.type === 'local' ? '本地' : s.type === 'alist' ? 'Alist' : 'WebDAV'})
-                </option>
-              ))}
-              {sources.length === 0 && <option value="">暂无挂载源</option>}
-            </select>
+    <>
+      <aside className="w-full flex flex-col bg-white/80 backdrop-blur-xl border-r border-black/5 h-full overflow-hidden select-none">
+        {/* 顶部 Logo 与系统标头 */}
+        <div className="p-5 border-b border-black/5 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-headline font-extrabold tracking-tight text-on-surface">VideoTracker</h1>
+            <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider mt-0.5 opacity-70">
+              学习跟踪仪表盘
+            </p>
           </div>
+          
+          {/* 收起侧边栏按钮 */}
+          <button
+            onClick={onCollapse}
+            className="w-8 h-8 rounded-xl text-on-surface-variant hover:bg-black/[0.04] hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
+            title="收起侧边栏"
+          >
+            <span className="material-symbols-outlined text-[18px]">menu</span>
+          </button>
+        </div>
 
-          {/* PotPlayer 风格：平铺/树状及排序控制条 */}
-          <div className="px-4 py-2 flex items-center justify-between border-b border-black/5 bg-black/[0.01]">
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setViewMode(viewMode === 'tree' ? 'flat' : 'tree')}
-                className={`px-2 py-1 rounded-lg hover:bg-black/[0.04] flex items-center gap-1 text-[10px] font-extrabold transition-all cursor-pointer ${
-                  viewMode === 'flat' ? 'text-primary bg-primary/5' : 'text-on-surface-variant'
-                }`}
-                title={viewMode === 'tree' ? '平铺展示列表 (打平所有文件夹)' : '层级大纲展示'}
-              >
-                <span className="material-symbols-outlined text-[15px]">
-                  {viewMode === 'tree' ? 'format_list_bulleted' : 'account_tree'}
-                </span>
-                <span>{viewMode === 'tree' ? '树状大纲' : '平铺视频'}</span>
-              </button>
+        {/* 选项卡导航 */}
+        <nav className="p-4 space-y-1">
+          <button
+            onClick={() => setCurrentTab('dashboard')}
+            className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl transition-all ${
+              currentTab === 'dashboard'
+                ? 'bg-primary text-white font-semibold shadow-sm shadow-primary/20'
+                : 'text-on-surface-variant hover:bg-black/[0.03] hover:text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[20px]">dashboard</span>
+            <span className="text-sm font-medium">学习主台</span>
+          </button>
+          <button
+            onClick={() => setCurrentTab('sources')}
+            className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl transition-all ${
+              currentTab === 'sources'
+                ? 'bg-primary text-white font-semibold shadow-sm shadow-primary/20'
+                : 'text-on-surface-variant hover:bg-black/[0.03] hover:text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[20px]">cloud</span>
+            <span className="text-sm font-medium">挂载源管理</span>
+          </button>
+          <button
+            onClick={() => setCurrentTab('analytics')}
+            className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl transition-all ${
+              currentTab === 'analytics'
+                ? 'bg-primary text-white font-semibold shadow-sm shadow-primary/20'
+                : 'text-on-surface-variant hover:bg-black/[0.03] hover:text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[20px]">analytics</span>
+            <span className="text-sm font-medium">数据大屏</span>
+          </button>
+          <button
+            onClick={() => setCurrentTab('settings')}
+            className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl transition-all ${
+              currentTab === 'settings'
+                ? 'bg-primary text-white font-semibold shadow-sm shadow-primary/20'
+                : 'text-on-surface-variant hover:bg-black/[0.03] hover:text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[20px]">settings</span>
+            <span className="text-sm font-medium">系统设置</span>
+          </button>
+        </nav>
+
+        {/* 仅在仪表盘模式下展示侧边栏大纲目录 */}
+        {currentTab === 'dashboard' && (
+          <div className="flex-1 flex flex-col overflow-hidden border-t border-black/5 mt-2">
+            {/* 数据源选择器 */}
+            <div className="px-4 py-3 flex items-center justify-between bg-black/[0.01] border-b border-black/5">
+              <CustomSelect
+                value={currentSource ? currentSource.id : ''}
+                onChange={(val) => setCurrentSource(sources.find(s => s.id === val) || null)}
+                options={sources.length > 0 ? sources.map(s => ({
+                  value: s.id,
+                  label: `${s.name} (${s.type === 'local' ? '本地' : s.type === 'alist' ? 'Alist' : 'WebDAV'})`
+                })) : [{ value: '', label: '暂无挂载源' }]}
+                className="w-full"
+                variant="card"
+              />
             </div>
 
-            {/* 平铺模式下的排序与极简样式控制 */}
-            {viewMode === 'flat' && (
-              <div className="flex items-center gap-1 text-on-surface-variant">
-                {sortBy === 'shuffle' && (
-                  <button
-                    type="button"
-                    onClick={handleShuffleClick}
-                    className="p-0.5 rounded hover:bg-black/[0.04] flex items-center cursor-pointer mr-0.5 text-primary"
-                    title="重新随机打乱"
-                  >
-                    <span className="material-symbols-outlined text-[13px]">shuffle</span>
-                  </button>
-                )}
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-transparent border-none text-[9px] font-bold p-0 pr-4 focus:ring-0 text-on-surface-variant cursor-pointer"
-                >
-                  <option value="name">文件名</option>
-                  <option value="size">大小</option>
-                  <option value="ext">扩展名</option>
-                  <option value="mtime">修改日期</option>
-                  <option value="duration">播放时长</option>
-                  <option value="shuffle">随机乱序</option>
-                </select>
-
+            {/* PotPlayer 风格：平铺/树状及排序控制条 */}
+            <div className="px-4 py-2 flex items-center justify-between border-b border-black/5 bg-black/[0.01]">
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  className="p-0.5 rounded hover:bg-black/[0.04] flex items-center cursor-pointer"
-                  title={sortOrder === 'asc' ? '升序 (点击切换降序)' : '降序 (点击切换升序)'}
+                  onClick={() => setViewMode(viewMode === 'tree' ? 'flat' : 'tree')}
+                  className={`px-2 py-1 rounded-lg hover:bg-black/[0.04] flex items-center gap-1 text-[10px] font-extrabold transition-all cursor-pointer ${
+                    viewMode === 'flat' ? 'text-primary bg-primary/5' : 'text-on-surface-variant'
+                  }`}
+                  title={viewMode === 'tree' ? '平铺展示列表 (打平所有文件夹)' : '层级大纲展示'}
                 >
-                  <span className="material-symbols-outlined text-[13px]">
-                    {sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+                  <span className="material-symbols-outlined text-[15px]">
+                    {viewMode === 'tree' ? 'format_list_bulleted' : 'account_tree'}
                   </span>
+                  <span>{viewMode === 'tree' ? '树状大纲' : '平铺视频'}</span>
                 </button>
               </div>
-            )}
-          </div>
 
-          {/* 目录树/平铺滚动区域 */}
-          <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-20 text-xs text-on-surface-variant/60">
-                <span className="animate-spin mr-2">⏳</span> 正在扫描资源树...
-              </div>
-            ) : fileTree.length > 0 ? (
-              viewMode === 'tree' ? (
-                // 树状展示
-                <div className="space-y-1">{renderTreeNodes(fileTree)}</div>
-              ) : (
-                // PotPlayer 风格：平铺展示 (剔除文件夹)
-                <div className="space-y-1">
-                  {sortedFlatVideos.map(video => {
-                    const isSelected = activeVideoPath === video.path;
-                    const percent = getProgressPercent(video.path);
-                    const prog = progressMap[video.path];
-                    const showProgressBg = percent > 0 && !prog?.isFinished;
-                    const durStr = prog?.duration ? ` · ${formatDuration(prog.duration)}` : '';
-                    const metaStr = `${formatSize(video.size)}${durStr}`;
+              {/* 平铺模式下的排序与极简样式控制 */}
+              {viewMode === 'flat' && (
+                <div className="flex items-center gap-1 text-on-surface-variant">
+                  {sortBy === 'shuffle' && (
+                    <button
+                      type="button"
+                      onClick={handleShuffleClick}
+                      className="p-0.5 rounded hover:bg-black/[0.04] flex items-center cursor-pointer mr-0.5 text-primary"
+                      title="重新随机打乱"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">shuffle</span>
+                    </button>
+                  )}
+                  <CustomSelect
+                    value={sortBy}
+                    onChange={(val) => setSortBy(val as any)}
+                    options={[
+                      { value: 'name', label: '文件名' },
+                      { value: 'size', label: '大小' },
+                      { value: 'ext', label: '扩展名' },
+                      { value: 'mtime', label: '修改日期' },
+                      { value: 'duration', label: '播放时长' },
+                      { value: 'shuffle', label: '随机乱序' }
+                    ]}
+                    variant="flat"
+                    dropdownAlign="right"
+                  />
 
-                    return (
-                      <div
-                        key={video.path}
-                        onClick={() => handlePlayVideo(video)}
-                        className={`relative flex items-center gap-2.5 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
-                          isSelected ? 'bg-primary/10 text-primary font-semibold' : 'text-on-surface hover:bg-black/[0.03]'
-                        }`}
-                      >
-                        {showProgressBg && (
-                          <div 
-                            className="absolute left-0 top-0 bottom-0 bg-primary/8 pointer-events-none z-0 rounded-l-lg"
-                            style={{ width: `${percent}%` }}
-                          />
-                        )}
-                        
-                        {renderProgressIcon(video.path)}
-                        
-                        <div className="relative z-10 flex-1 min-w-0 flex flex-col gap-0.5">
-                          <span className="text-xs truncate w-full" title={video.name}>{video.name}</span>
-                          {metaStr && (
-                            <div className="relative z-10 text-[9px] text-on-surface-variant/50 font-mono">
-                              {metaStr}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <button
+                    type="button"
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                    className="p-0.5 rounded hover:bg-black/[0.04] flex items-center cursor-pointer"
+                    title={sortOrder === 'asc' ? '升序 (点击切换降序)' : '降序 (点击切换升序)'}
+                  >
+                    <span className="material-symbols-outlined text-[13px]">
+                      {sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+                    </span>
+                  </button>
                 </div>
-              )
-            ) : (
-              <div className="flex flex-col items-center justify-center h-40 text-center px-4">
-                <span className="material-symbols-outlined text-3xl text-on-surface-variant/40 mb-2">folder_off</span>
-                <span className="text-xs text-on-surface-variant">
-                  {sources.length === 0 ? '请先到“挂载源管理”添加资源' : '此媒体库内没有兼容的视频文件'}
-                </span>
-              </div>
-            )}
+              )}
+            </div>
+
+            {/* 目录树/平铺滚动区域 */}
+            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-20 text-xs text-on-surface-variant/60">
+                  <span className="animate-spin mr-2">⏳</span> 正在扫描资源树...
+                </div>
+              ) : fileTree.length > 0 ? (
+                viewMode === 'tree' ? (
+                  // 树状展示
+                  <div className="space-y-1">{renderTreeNodes(fileTree)}</div>
+                ) : (
+                  // PotPlayer 风格：平铺展示 (剔除文件夹)
+                  <div className="space-y-1">
+                    {sortedFlatVideos.map(video => {
+                      const isSelected = activeVideoPath === video.path;
+                      const percent = getProgressPercent(video.path);
+                      const prog = progressMap[video.path];
+                      const showProgressBg = percent > 0 && !prog?.isFinished;
+                      const durStr = prog?.duration ? ` · ${formatDuration(prog.duration)}` : '';
+                      const metaStr = `${formatSize(video.size)}${durStr}`;
+
+                      const isFinished = prog?.isFinished || false;
+                      return (
+                        <div
+                          key={video.path}
+                          onClick={() => handlePlayVideo(video)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setContextMenu({
+                              visible: true,
+                              x: e.clientX,
+                              y: e.clientY,
+                              videoPath: video.path,
+                              videoName: video.name,
+                              isFinished,
+                              duration: prog?.duration
+                            });
+                          }}
+                          className={`relative flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
+                            isSelected ? 'bg-primary/10 text-primary font-semibold' : 'text-on-surface hover:bg-black/[0.03]'
+                          }`}
+                        >
+                          {showProgressBg && (
+                            <div 
+                              className="absolute left-0 top-0 bottom-0 bg-primary/8 pointer-events-none z-0 rounded-l-lg"
+                              style={{ width: `${percent}%` }}
+                            />
+                          )}
+                          
+                          {/* 绿点表示已学完 */}
+                          {isFinished && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0 relative z-10 animate-pulse" />
+                          )}
+
+                          {renderProgressIcon(video.path)}
+                          
+                          <div className="relative z-10 flex-1 min-w-0 flex flex-col gap-0.5">
+                            <div className="flex items-center justify-between gap-1.5 w-full">
+                              <span className="text-xs truncate" title={video.name}>{video.name}</span>
+                              {isFinished && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-green-500/10 text-green-600 font-bold flex-shrink-0">
+                                  已学完
+                                </span>
+                              )}
+                            </div>
+                            {metaStr && (
+                              <div className="relative z-10 text-[9px] text-on-surface-variant/50 font-mono">
+                                {metaStr}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+                  <span className="material-symbols-outlined text-3xl text-on-surface-variant/40 mb-2">folder_off</span>
+                  <span className="text-xs text-on-surface-variant">
+                    {sources.length === 0 ? '请先到“挂载源管理”添加资源' : '此媒体库内没有兼容的视频文件'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
+        )}
+      </aside>
+
+      {/* 自定义右键上下文菜单 */}
+      {contextMenu.visible && (
+        <div 
+          className="fixed bg-white/90 backdrop-blur-md border border-black/5 rounded-xl shadow-xl py-1 z-[300] min-w-[130px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              handleToggleFinishedStatus(
+                contextMenu.videoPath,
+                contextMenu.videoName,
+                contextMenu.isFinished,
+                contextMenu.duration
+              );
+              setContextMenu(prev => ({ ...prev, visible: false }));
+            }}
+            className="w-full text-left px-3 py-2 text-xs hover:bg-primary hover:text-white transition-colors flex items-center gap-2 cursor-pointer font-medium text-on-surface"
+          >
+            <span className="material-symbols-outlined text-[14px]">
+              {contextMenu.isFinished ? 'bookmark_border' : 'bookmark_added'}
+            </span>
+            <span>{contextMenu.isFinished ? '标记为未完成' : '标记为已完成'}</span>
+          </button>
         </div>
       )}
-    </aside>
+    </>
   );
 }

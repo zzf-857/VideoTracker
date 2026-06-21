@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { storageService, MediaSourceConfig } from '../services/storage';
+import CustomSelect from './CustomSelect';
 
 interface DashboardProps {
   currentSource: MediaSourceConfig | null;
   videoCount: number; // 视频集数
   playedVideoCount: number; // 已看完的集数
   totalLocalDuration: number; // 本地视频总时长（秒）
+  playedLocalDuration: number; // 本地已看完视频总时长（秒）
   refreshSignal: number;
 }
 
@@ -14,11 +16,13 @@ export default function Dashboard({
   videoCount,
   playedVideoCount,
   totalLocalDuration,
+  playedLocalDuration,
   refreshSignal
 }: DashboardProps) {
   const [dailyHours, setDailyHours] = useState<number>(1.5); // 每日目标学习时长（小时）
   const [dailyEpisodes, setDailyEpisodes] = useState<number>(3); // 每日观看集数
   const [speed, setSpeed] = useState<number>(1.25); // 倍速
+  const [statViewMode, setStatViewMode] = useState<'count' | 'duration'>('count'); // 统计文字模式
   
   // 计算进度百分比
   const progressPercent = videoCount > 0 ? Math.round((playedVideoCount / videoCount) * 100) : 0;
@@ -26,13 +30,20 @@ export default function Dashboard({
   // 格式化时长为小时
   const totalHours = Math.round((totalLocalDuration / 3600) * 10) / 10;
 
-  // 1. 本地源：根据总时长和倍速计算预计天数
+  // 格式化时长为 xx小时xx分钟
+  const formatDurationToHoursMinutes = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours}小时${minutes}分钟`;
+  };
+
+  // 1. 本地源：根据总时长 and 倍速计算预计天数
   // 天数 = (总时长 / 倍速) / 每日小时数
   const estimatedDaysByDuration = dailyHours > 0 
     ? Math.ceil((totalHours / speed) / dailyHours) 
     : 0;
 
-  // 2. 远端源：根据总课时和每日集数计算预计天数
+  // 2. 远端源：根据总课时 and 每日集数计算预计天数
   // 天数 = 未看完的视频数 / 每日集数
   const remainingEpisodes = Math.max(0, videoCount - playedVideoCount);
   const estimatedDaysByEpisodes = dailyEpisodes > 0 
@@ -47,8 +58,16 @@ export default function Dashboard({
         <span className="font-bold text-base text-on-surface truncate max-w-[240px]" title={currentSource ? currentSource.name : ''}>
           {currentSource ? currentSource.name : '未选择挂载源'}
         </span>
-        <span className="text-xs text-on-surface-variant mt-1">
-          共 {videoCount} 课时 · 已学完 {playedVideoCount} 课时
+        <span 
+          onClick={() => setStatViewMode(prev => prev === 'count' ? 'duration' : 'count')}
+          className="text-xs text-on-surface-variant hover:text-primary transition-colors cursor-pointer select-none underline decoration-dotted mt-1 w-fit"
+          title="点击切换统计单位 (课时数 / 视频时长)"
+        >
+          {statViewMode === 'count' ? (
+            `共 ${videoCount} 课时 · 已学完 ${playedVideoCount} 课时`
+          ) : (
+            `共 ${formatDurationToHoursMinutes(totalLocalDuration)} · 已学完 ${formatDurationToHoursMinutes(playedLocalDuration)}`
+          )}
         </span>
       </div>
 
@@ -74,19 +93,21 @@ export default function Dashboard({
 
             <div className="flex flex-col">
               <span className="text-[9px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">播放倍速</span>
-              <select
+              <CustomSelect
                 value={speed}
-                onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                className="p-1 pr-6 text-xs border border-black/10 rounded-lg font-bold focus:ring-1 focus:ring-primary bg-white cursor-pointer"
-              >
-                <option value="1">1.0 x</option>
-                <option value="1.25">1.25 x</option>
-                <option value="1.5">1.5 x</option>
-                <option value="1.75">1.75 x</option>
-                <option value="2">2.0 x</option>
-                <option value="2.5">2.5 x</option>
-                <option value="3">3.0 x</option>
-              </select>
+                onChange={(val) => setSpeed(val)}
+                options={[
+                  { value: 1, label: '1.0 x' },
+                  { value: 1.25, label: '1.25 x' },
+                  { value: 1.5, label: '1.5 x' },
+                  { value: 1.75, label: '1.75 x' },
+                  { value: 2, label: '2.0 x' },
+                  { value: 2.5, label: '2.5 x' },
+                  { value: 3, label: '3.0 x' }
+                ]}
+                className="min-w-[80px]"
+                variant="card"
+              />
             </div>
           </>
         ) : (

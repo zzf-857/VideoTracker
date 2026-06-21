@@ -222,9 +222,167 @@ export default function App() {
     onIdleTimeout: handleIdleTimeout
   });
 
+  // 维护一个运行期间时长获取失败的视频路径列表，避免无限重复重试
+  const [failedPaths, setFailedPaths] = useState<Set<string>>(new Set());
+
+  // 解析某个节点的播放 URL
+  const getVideoStreamUrl = async (node: TreeNode): Promise<string> => {
+    if (!currentSource) return '';
+    if (currentSource.type === 'local') {
+      if ('electronAPI' in window) {
+        return await (window as any).electronAPI.getVideoStreamUrl(node.path);
+      }
+      return '';
+    } else {
+      const parsedUrl = new URL(currentSource.settings?.url || '');
+      if (currentSource.settings?.username && currentSource.settings?.password) {
+        parsedUrl.username = encodeURIComponent(currentSource.settings.username);
+        parsedUrl.password = encodeURIComponent(currentSource.settings.password);
+      }
+      
+      const relative = node.path.startsWith('/') ? node.path : `/${node.path}`;
+      const urlPath = parsedUrl.pathname.endsWith('/') ? parsedUrl.pathname.slice(0, -1) : parsedUrl.pathname;
+      
+      if (node.path.startsWith(urlPath)) {
+        parsedUrl.pathname = node.path;
+      } else {
+        parsedUrl.pathname = `${urlPath}${relative}`;
+      }
+      return parsedUrl.toString();
+    }
+  };
+
+  // 后台静默扫描未播视频的时长并保存
+  useEffect(() => {
+    if (!appData || !currentSource || fileTree.length === 0) return;
+
+    let active = true;
+
+    // 递归获取所有平铺视频节点
+    const getFlatVideos = (nodes: TreeNode[]): TreeNode[] => {
+      let res: TreeNode[] = [];
+      for (const n of nodes) {
+        if (n.isDir) {
+          if (n.children) {
+            res = res.concat(getFlatVideos(n.children));
+          }
+        } else {
+          res.push(n);
+        }
+      }
+      return res;
+    };
+    const flatVideos = getFlatVideos(fileTree);
+
+    // 筛选出没有时长记录且不在失败列表中的视频
+    const queue = flatVideos.filter(v => {
+      const prog = appData.progress[v.path];
+      return (!prog || !prog.duration) && !failedPaths.has(v.path);
+    });
+
+    if (queue.length === 0) return;
+
+    // 获取时长的辅助 Promise
+    const fetchDuration = (url: string): Promise<number> => {
+      return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.src = url;
+        video.crossOrigin = 'anonymous';
+
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error('Timeout'));
+        }, 8000); // 8秒超时
+
+        const onLoadedMetadata = () => {
+          clearTimeout(timeout);
+          const dur = video.duration;
+          cleanup();
+          if (isNaN(dur) || dur === Infinity || dur <= 0) {
+            reject(new Error('Invalid duration'));
+          } else {
+            resolve(dur);
+          }
+        };
+
+        const onError = () => {
+          clearTimeout(timeout);
+          cleanup();
+          reject(new Error('Load error'));
+        };
+
+        const cleanup = () => {
+          video.removeEventListener('loadedmetadata', onLoadedMetadata);
+          video.removeEventListener('error', onError);
+          video.src = '';
+          try {
+            video.load();
+          } catch (e) {}
+        };
+
+        video.addEventListener('loadedmetadata', onLoadedMetadata);
+        video.addEventListener('error', onError);
+      });
+    };
+
+    // 顺序消费队列
+    const processQueue = async () => {
+      for (const node of queue) {
+        if (!active) break;
+        try {
+          const url = await getVideoStreamUrl(node);
+          if (!url) throw new Error('Cannot get stream url');
+
+          const duration = await fetchDuration(url);
+          if (!active) break;
+
+          // 保存时长到存储
+          await storageService.saveVideoProgress(node.path, {
+            currentTime: 0,
+            duration,
+            isFinished: false
+          });
+
+          // 局部更新 state 以刷新 UI，避免调用 loadData 造成全局重新请求的开销
+          setAppData(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              progress: {
+                ...prev.progress,
+                [node.path]: {
+                  currentTime: 0,
+                  duration,
+                  isFinished: false,
+                  lastPlayedTime: Date.now()
+                }
+              }
+            };
+          });
+        } catch (err) {
+          console.warn(`Failed to silent-fetch duration for ${node.name}:`, err);
+          setFailedPaths(prev => {
+            const next = new Set(prev);
+            next.add(node.path);
+            return next;
+          });
+        }
+        // 延时 150ms 处理下一个视频，防卡顿与连接数拥堵
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+    };
+
+    processQueue();
+
+    return () => {
+      active = false;
+    };
+  }, [fileTree, appData?.progress, currentSource, failedPaths]);
+
   // 获取该挂载源下所有的视频统计信息（计算课时数和已学完数）
   const getSourceStats = () => {
-    if (!appData || !currentSource) return { totalCount: 0, finishedCount: 0, totalDuration: 0 };
+    if (!appData || !currentSource) return { totalCount: 0, finishedCount: 0, totalDuration: 0, finishedDuration: 0 };
 
     const getFlatVideos = (nodes: TreeNode[]): TreeNode[] => {
       let res: TreeNode[] = [];
@@ -244,24 +402,23 @@ export default function App() {
     const totalCount = flatVideos.length;
     let finishedCount = 0;
     let totalDuration = 0;
+    let finishedDuration = 0;
 
     for (const video of flatVideos) {
       const prog = appData.progress[video.path];
       if (prog) {
+        const videoDur = prog.duration > 0 ? prog.duration : 1800;
+        totalDuration += videoDur;
         if (prog.isFinished) {
           finishedCount++;
-        }
-        if (prog.duration > 0) {
-          totalDuration += prog.duration;
-        } else {
-          totalDuration += 1800; // 未播视频估算 30 分钟
+          finishedDuration += videoDur;
         }
       } else {
         totalDuration += 1800; // 未播视频估算 30 分钟
       }
     }
 
-    return { totalCount, finishedCount, totalDuration };
+    return { totalCount, finishedCount, totalDuration, finishedDuration };
   };
 
   const stats = getSourceStats();
@@ -284,6 +441,7 @@ export default function App() {
           progressMap={appData?.progress || {}}
           refreshSignal={refreshSignal}
           onCollapse={() => setIsSidebarCollapsed(true)}
+          onRefresh={handleRefresh}
           
           sources={sources}
           currentSource={currentSource}
@@ -346,7 +504,7 @@ export default function App() {
                   <span className="material-symbols-outlined text-5xl text-primary/40 mb-3 animate-bounce">play_circle</span>
                   <h3 className="text-base font-bold text-on-surface">开启高效学习之旅</h3>
                   <p className="text-xs text-on-surface-variant mt-1.5 max-w-[280px]">
-                    请在左侧侧边栏中选择一个挂载源，并双击具体的课程视频开始播放
+                     请在左侧侧边栏中选择一个挂载源，并双击具体的课程视频开始播放
                   </p>
                 </div>
               )}
@@ -368,6 +526,7 @@ export default function App() {
               videoCount={stats.totalCount}
               playedVideoCount={stats.finishedCount}
               totalLocalDuration={stats.totalDuration}
+              playedLocalDuration={stats.finishedDuration}
               refreshSignal={refreshSignal}
             />
           </div>
