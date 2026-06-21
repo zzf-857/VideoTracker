@@ -176,6 +176,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false, // 禁用后台限频，确保窗口在失焦/后台时定时器依然精准无阻地走字
     },
   });
 
