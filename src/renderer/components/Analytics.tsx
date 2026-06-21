@@ -153,14 +153,15 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
     let lastMonth = '';
     return columns.map((col) => {
       const validCell = col.find(c => c.dateStr !== '');
-      if (!validCell) return '';
+      if (!validCell) return { label: '', isDim: true };
       const date = new Date(validCell.dateStr);
       const mName = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+      const hasActiveCell = col.some(c => c.dateStr !== '' && c.daysAgo < daysRange);
       if (mName !== lastMonth) {
         lastMonth = mName;
-        return mName;
+        return { label: mName, isDim: !hasActiveCell };
       }
-      return '';
+      return { label: '', isDim: !hasActiveCell };
     });
   };
   const monthLabels = getMonthLabels();
@@ -344,7 +345,9 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                       key={cellIdx}
                       className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-300 ${
                         cell.daysAgo >= daysRange 
-                          ? 'opacity-[0.04] pointer-events-none scale-[0.9] saturate-0' 
+                          ? (cell.duration > 0 
+                              ? 'opacity-[0.25] pointer-events-none scale-[0.95] saturate-[0.5]' 
+                              : 'opacity-[0.5] pointer-events-none scale-[0.95]')
                           : 'opacity-100'
                       }`}
                       title={cell.dateStr && cell.daysAgo < daysRange ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
