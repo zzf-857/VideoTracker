@@ -41,6 +41,8 @@ export default function Player({
   useEffect(() => {
     if (!artRef.current) return;
 
+    let isUnmounting = false;
+
     // 格式化 highlight
     const highlight = activeChapters.map(c => ({
       time: c.time,
@@ -384,6 +386,7 @@ export default function Player({
 
     // 实时更新当前播放时长
     art.on('video:timeupdate', () => {
+      if (isUnmounting) return;
       const currentTime = art.currentTime;
       const duration = art.duration;
       if (duration > 0) {
@@ -413,6 +416,18 @@ export default function Player({
     });
 
     return () => {
+      isUnmounting = true;
+
+      // 强制在卸载前同步执行一次最高精度的落盘，防止 timeupdate 遗漏或被销毁覆写为 0
+      if (art && art.currentTime > 0 && art.duration > 0) {
+        const isFinished = art.currentTime >= art.duration * 0.95;
+        storageService.saveVideoProgress(videoPath, {
+          currentTime: art.currentTime,
+          duration: art.duration,
+          isFinished
+        });
+      }
+
       if (handleMouseMove && progressEl) {
         progressEl.removeEventListener('mousemove', handleMouseMove);
       }
@@ -496,6 +511,33 @@ export default function Player({
         e.preventDefault();
         onSpeedChange(1.0);
         art.notice.show = `倍速: 1.0x`;
+      } else if (key === 'space') {
+        e.preventDefault();
+        if (art.playing) {
+          art.pause();
+        } else {
+          art.play();
+        }
+      } else if (key === 'arrowleft') {
+        e.preventDefault();
+        const targetTime = Math.max(0, art.currentTime - 5);
+        art.currentTime = targetTime;
+        art.notice.show = `快退: -5s`;
+      } else if (key === 'arrowright') {
+        e.preventDefault();
+        const targetTime = Math.min(art.duration, art.currentTime + 5);
+        art.currentTime = targetTime;
+        art.notice.show = `快进: +5s`;
+      } else if (key === 'arrowup') {
+        e.preventDefault();
+        const targetVol = Math.min(1, art.volume + 0.1);
+        art.volume = targetVol;
+        art.notice.show = `音量: ${Math.round(targetVol * 100)}%`;
+      } else if (key === 'arrowdown') {
+        e.preventDefault();
+        const targetVol = Math.max(0, art.volume - 0.1);
+        art.volume = targetVol;
+        art.notice.show = `音量: ${Math.round(targetVol * 100)}%`;
       }
     };
 
