@@ -103,7 +103,7 @@ export default function LogCalendar({ refreshSignal }: LogCalendarProps) {
   return (
     <div className="flex flex-col gap-6 h-full">
       {/* 活跃热力图卡片 */}
-      <div className="glass-panel rounded-2xl p-5 bg-white/80">
+      <div className="bg-white/50 border border-black/5 rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <span className="text-sm font-semibold text-on-surface">活跃热力图</span>
           <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
@@ -140,7 +140,7 @@ export default function LogCalendar({ refreshSignal }: LogCalendarProps) {
       </div>
 
       {/* 当日播放历史详情卡片 */}
-      <div className="flex-1 glass-panel rounded-2xl flex flex-col overflow-hidden bg-white/80">
+      <div className="flex-1 bg-white/50 border border-black/5 rounded-2xl flex flex-col overflow-hidden shadow-sm">
         <div className="p-4 border-b border-black/5 flex items-center gap-2 bg-black/[0.01]">
           <span className="material-symbols-outlined text-[18px] text-on-surface">history</span>
           <span className="text-sm font-semibold text-on-surface">

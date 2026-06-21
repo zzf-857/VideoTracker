@@ -41,10 +41,12 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState<number>(260);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isResizing, setIsResizing] = useState<boolean>(false);
+  const [leftHover, setLeftHover] = useState<boolean>(false);
 
   const [rightSidebarWidth, setRightSidebarWidth] = useState<number>(320);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState<boolean>(false);
   const [isRightResizing, setIsRightResizing] = useState<boolean>(false);
+  const [rightHover, setRightHover] = useState<boolean>(false);
 
   // 文件树管理
   const [sources, setSources] = useState<MediaSourceConfig[]>([]);
@@ -293,27 +295,33 @@ export default function App() {
       </div>
 
       {/* 左侧拉伸手柄与一键折叠按钮 */}
-      <div className="relative flex-shrink-0 z-40">
+      <div 
+        className="relative flex-shrink-0 z-40"
+        onMouseEnter={() => setLeftHover(true)}
+        onMouseLeave={() => setLeftHover(false)}
+      >
         <div
           onMouseDown={startResizing}
-          className={`w-[4px] absolute top-0 bottom-0 cursor-col-resize transition-colors ${
+          className={`w-[8px] absolute top-0 bottom-0 cursor-col-resize transition-colors ${
             isSidebarCollapsed ? 'pointer-events-none' : ''
           } ${
-            isResizing ? 'bg-primary' : 'bg-transparent hover:bg-primary/30'
+            isResizing ? 'bg-primary' : 'bg-transparent hover:bg-primary/20'
           }`}
           style={{
-            left: isSidebarCollapsed ? 0 : -2,
+            left: isSidebarCollapsed ? 0 : -4,
           }}
         />
         <button
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white border border-black/10 flex items-center justify-center shadow-md hover:bg-primary hover:text-white active:scale-95 transition-all text-on-surface-variant cursor-pointer z-50 group"
+          className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-12 rounded-full bg-white/95 backdrop-blur-md border border-black/10 flex items-center justify-center shadow-md text-on-surface-variant cursor-pointer z-50 transition-all duration-200 ${
+            isSidebarCollapsed || leftHover || isResizing ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
+          } hover:bg-primary hover:text-white hover:border-primary active:scale-90`}
           style={{
-            left: isSidebarCollapsed ? 12 : 0,
+            left: isSidebarCollapsed ? 6 : 0,
           }}
           title={isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
         >
-          <span className="material-symbols-outlined text-[16px] group-hover:scale-110 transition-transform">
+          <span className="material-symbols-outlined text-[12px] font-bold">
             {isSidebarCollapsed ? 'chevron_right' : 'chevron_left'}
           </span>
         </button>
@@ -366,40 +374,47 @@ export default function App() {
               />
             </section>
 
-            {/* 右侧：日历热力图与自动日志时间轴 (可拉伸/折叠) */}
+            {/* 右侧：日历热力图与自动日志时间轴 (可拉伸/折叠 - 自带毛玻璃对称背板) */}
             <div 
-              className="h-full relative flex-shrink-0 overflow-hidden"
+              className="h-full relative flex-shrink-0 overflow-hidden bg-white/80 backdrop-blur-xl border-l border-black/5"
               style={{ 
                 width: isRightSidebarCollapsed ? 0 : rightSidebarWidth,
                 transition: isRightResizing ? 'none' : 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
               }}
             >
-              <LogCalendar refreshSignal={refreshSignal} />
+              <div className="p-6 h-full overflow-y-auto custom-scrollbar">
+                <LogCalendar refreshSignal={refreshSignal} />
+              </div>
             </div>
 
             {/* 右侧拉伸手柄与一键折叠按钮 */}
-            <div className="relative flex-shrink-0 z-40">
+            <div 
+              className="relative flex-shrink-0 z-40"
+              onMouseEnter={() => setRightHover(true)}
+              onMouseLeave={() => setRightHover(false)}
+            >
               <div
                 onMouseDown={startRightResizing}
-                className={`w-[4px] absolute top-0 bottom-0 cursor-col-resize transition-colors ${
+                className={`w-[8px] absolute top-0 bottom-0 cursor-col-resize transition-colors ${
                   isRightSidebarCollapsed ? 'pointer-events-none' : ''
                 } ${
-                  isRightResizing ? 'bg-primary' : 'bg-transparent hover:bg-primary/30'
+                  isRightResizing ? 'bg-primary' : 'bg-transparent hover:bg-primary/20'
                 }`}
                 style={{
-                  right: isRightSidebarCollapsed ? 0 : rightSidebarWidth - 2,
+                  right: isRightSidebarCollapsed ? 0 : rightSidebarWidth - 4,
                 }}
               />
               <button
                 onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
-                className="absolute top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full bg-white border border-black/10 flex items-center justify-center shadow-md hover:bg-primary hover:text-white active:scale-95 transition-all text-on-surface-variant cursor-pointer z-50 group"
+                className={`absolute top-1/2 -translate-y-1/2 translate-x-1/2 w-4 h-12 rounded-full bg-white/95 backdrop-blur-md border border-black/10 flex items-center justify-center shadow-md text-on-surface-variant cursor-pointer z-50 transition-all duration-200 ${
+                  isRightSidebarCollapsed || rightHover || isRightResizing ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
+                } hover:bg-primary hover:text-white hover:border-primary active:scale-90`}
                 style={{
-                  right: isRightSidebarCollapsed ? 12 : rightSidebarWidth - 12,
-                  transition: isRightResizing ? 'none' : 'right 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                  right: isRightSidebarCollapsed ? 6 : rightSidebarWidth - 6,
                 }}
                 title={isRightSidebarCollapsed ? "展开日历" : "收起日历"}
               >
-                <span className="material-symbols-outlined text-[16px] group-hover:scale-110 transition-transform">
+                <span className="material-symbols-outlined text-[12px] font-bold">
                   {isRightSidebarCollapsed ? 'chevron_left' : 'chevron_right'}
                 </span>
               </button>
