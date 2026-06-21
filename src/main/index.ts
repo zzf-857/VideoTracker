@@ -217,6 +217,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       backgroundThrottling: false, // 禁用后台限频，确保窗口在失焦/后台时定时器依然精准无阻地走字
+      webSecurity: false, // 禁用跨域安全限制，允许直接跨域连接 WebDAV 网盘
     },
   });
 
