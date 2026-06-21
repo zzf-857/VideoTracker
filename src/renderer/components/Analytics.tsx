@@ -164,27 +164,55 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
   };
   const monthLabels = getMonthLabels();
 
-  // 自适应格子及月份布局配置
+  // 期间数据分析
+  const getRangeStats = (days: number) => {
+    let totalSecs = 0;
+    let activeDays = 0;
+    const today = new Date();
+    
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const log = dailyLogs[dateStr];
+      if (log && log.totalDuration > 0) {
+        totalSecs += log.totalDuration;
+        activeDays++;
+      }
+    }
+    return {
+      totalDuration: totalSecs,
+      activeDays,
+      rate: Math.round((activeDays / days) * 100)
+    };
+  };
+  const rangeStats = getRangeStats(daysRange);
+
+  // 自适应格子尺寸配置 (保持 Github 风格紧凑排列)
   const heatmapConfig = {
     30: {
-      cellClass: 'w-full aspect-square rounded-md',
-      colStyle: { flex: '1 1 0%', maxWidth: '32px', minWidth: '20px' },
-      gapClass: 'gap-2'
+      cellClass: 'w-6 h-6 rounded-md',
+      gapClass: 'gap-1.5',
+      containerGapClass: 'gap-1.5',
+      cellWidth: '24px'
     },
     90: {
-      cellClass: 'w-full aspect-square rounded-md',
-      colStyle: { flex: '1 1 0%', maxWidth: '22px', minWidth: '14px' },
-      gapClass: 'gap-1.5'
+      cellClass: 'w-4.5 h-4.5 rounded-[4px]',
+      gapClass: 'gap-1',
+      containerGapClass: 'gap-1',
+      cellWidth: '18px'
     },
     180: {
-      cellClass: 'w-full aspect-square rounded-[3px]',
-      colStyle: { flex: '1 1 0%', maxWidth: '16px', minWidth: '10px' },
-      gapClass: 'gap-1'
+      cellClass: 'w-3.5 h-3.5 rounded-[3px]',
+      gapClass: 'gap-1',
+      containerGapClass: 'gap-1',
+      cellWidth: '14px'
     },
     365: {
-      cellClass: 'w-full aspect-square rounded-[2px]',
-      colStyle: { flex: '1 1 0%', maxWidth: '11px', minWidth: '8px' },
-      gapClass: 'gap-1'
+      cellClass: 'w-2.5 h-2.5 rounded-[2px]',
+      gapClass: 'gap-1',
+      containerGapClass: 'gap-1',
+      cellWidth: '10px'
     }
   }[daysRange];
 
@@ -321,36 +349,60 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5 overflow-x-auto pb-2 custom-scrollbar">
-            <div className="flex justify-between w-full min-w-max pb-1">
-              {columns.map((column, colIdx) => (
-                <div 
-                  key={colIdx} 
-                  style={heatmapConfig.colStyle} 
-                  className={`flex flex-col ${heatmapConfig.gapClass}`}
-                >
-                  {column.map((cell, cellIdx) => (
-                    <div
-                      key={cellIdx}
-                      className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-200`}
-                      title={cell.dateStr ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
-                    />
-                  ))}
-                </div>
-              ))}
+          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 overflow-x-auto pb-2 custom-scrollbar">
+            {/* 左侧：热力图网格（保持极致紧凑） */}
+            <div className="flex flex-col gap-1.5 w-fit shrink-0">
+              <div className={`flex ${heatmapConfig.containerGapClass} w-fit`}>
+                {columns.map((column, colIdx) => (
+                  <div key={colIdx} className={`flex flex-col ${heatmapConfig.gapClass}`}>
+                    {column.map((cell, cellIdx) => (
+                      <div
+                        key={cellIdx}
+                        className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-200`}
+                        title={cell.dateStr ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+              
+              {/* 动态月份底部标识 */}
+              <div className={`flex ${heatmapConfig.containerGapClass} mt-2 select-none w-fit`}>
+                {monthLabels.map((label, idx) => (
+                  <div
+                    key={idx}
+                    style={{ width: heatmapConfig.cellWidth }}
+                    className="text-[9px] font-bold text-on-surface-variant text-left overflow-visible whitespace-nowrap"
+                  >
+                    {label}
+                  </div>
+                ))}
+              </div>
             </div>
-            {/* 动态月份底部标识 */}
-            <div className="flex justify-between w-full min-w-max mt-2 select-none">
-              {monthLabels.map((label, idx) => (
-                <div
-                  key={idx}
-                  style={heatmapConfig.colStyle}
-                  className="text-[9px] font-bold text-on-surface-variant text-left overflow-visible whitespace-nowrap"
-                >
-                  {label}
+            
+            {/* 右侧：当选择 30/90/180 天时，利用右侧多余空间展示区间统计指标（SaaS 简约卡片） */}
+            {daysRange < 365 && (
+              <div className="flex gap-6 p-4 bg-black/[0.02] border border-black/5 rounded-2xl min-w-[280px] self-start xl:self-center animate-fade-in shadow-inner">
+                <div className="flex-1 flex flex-col justify-center">
+                  <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">区间学习时长</span>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-2xl font-extrabold text-primary tracking-tight">{formatValue(rangeStats.totalDuration)}</span>
+                    <span className="text-[10px] text-on-surface-variant font-semibold">{getUnitLabel()}</span>
+                  </div>
                 </div>
-              ))}
-            </div>
+                
+                {/* 浅灰色垂直分割线 */}
+                <div className="w-[1px] bg-black/5 self-stretch" />
+                
+                <div className="flex-1 flex flex-col justify-center">
+                  <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">打卡活跃率</span>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-2xl font-extrabold text-primary tracking-tight">{rangeStats.rate}%</span>
+                    <span className="text-[10px] text-on-surface-variant font-semibold">({rangeStats.activeDays}天)</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
