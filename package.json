@@ -50,7 +50,7 @@
       "package.json"
     ],
     "win": {
-      "icon": "Assets/app.png",
+      "icon": "Assets/app.ico",
       "target": [
         {
           "target": "nsis",
