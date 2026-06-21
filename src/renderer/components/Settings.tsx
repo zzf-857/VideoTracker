@@ -30,6 +30,12 @@ interface SettingsProps {
   // 当前正在录制的快捷键字段名
   const [activeHotkeyKey, setActiveHotkeyKey] = useState<string | null>(null);
 
+  // 本地数据路径管理状态
+  const [storagePath, setStoragePath] = useState('');
+  const [showMigrateModal, setShowMigrateModal] = useState(false);
+  const [newSelectedPath, setNewSelectedPath] = useState('');
+  const [isMigrating, setIsMigrating] = useState(false);
+
   useEffect(() => {
     storageService.loadData().then(data => {
       setSettings(data.settings);
@@ -39,6 +45,12 @@ interface SettingsProps {
       setWebdavUser(data.settings.webdavUser || '');
       setWebdavPassword(data.settings.webdavPassword || '');
     });
+
+    if (window.electronAPI && window.electronAPI.getStoragePath) {
+      window.electronAPI.getStoragePath().then((path: string) => {
+        setStoragePath(path);
+      });
+    }
   }, [refreshSignal]);
 
   const handleSaveSettings = async (updates: Partial<AppSettings>) => {
@@ -70,6 +82,45 @@ interface SettingsProps {
     await storageService.saveData({ settings: defaultSettings });
     onRefresh();
     showToast('已重置为默认设置');
+  };
+
+  const handleChangeStoragePath = async () => {
+    if (!window.electronAPI || !window.electronAPI.selectFolder) {
+      alert('该功能仅在桌面端可用');
+      return;
+    }
+    const chosenPath = await window.electronAPI.selectFolder();
+    if (!chosenPath) return;
+
+    if (chosenPath === storagePath) {
+      showToast('所选路径与当前数据存储路径相同');
+      return;
+    }
+
+    setNewSelectedPath(chosenPath);
+    setShowMigrateModal(true);
+  };
+
+  const handleMigrate = async (moveData: boolean) => {
+    if (!window.electronAPI || !window.electronAPI.migrateStorage) return;
+    setIsMigrating(true);
+    try {
+      const res = await window.electronAPI.migrateStorage(newSelectedPath, moveData);
+      if (res && res.success) {
+        setStoragePath(res.newPath);
+        setShowMigrateModal(false);
+        showToast(moveData ? '数据一键迁移成功并切换路径' : '数据存储路径已切换');
+        // 重新加载配置
+        onRefresh();
+      } else {
+        alert(res?.error || '迁移失败');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('发生错误：' + (err.message || err));
+    } finally {
+      setIsMigrating(false);
+    }
   };
 
   // 全局捕获监听器以安全录制快捷键
@@ -284,6 +335,35 @@ interface SettingsProps {
               </div>
             </div>
           </section>
+
+          {/* 3. 本地数据路径管理 */}
+          <section className="apple-card rounded-2xl p-6 bg-white/80 transition-all hover:shadow-md">
+            <h3 className="font-bold text-base text-on-surface mb-4">本地数据路径管理</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1">当前数据存储路径</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={storagePath}
+                    className="flex-1 bg-black/[0.02] border border-black/10 rounded-xl px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                    title="当前数据存放目录"
+                  />
+                  <button
+                    onClick={handleChangeStoragePath}
+                    className="px-3 py-2 bg-primary/10 text-primary text-xs font-bold rounded-xl hover:bg-primary/20 active:scale-95 transition-all cursor-pointer font-semibold"
+                  >
+                    修改路径
+                  </button>
+                </div>
+                <p className="text-[10px] text-on-surface-variant/80 mt-1.5 leading-relaxed">
+                  提示：默认保存在系统 AppData 目录下。修改路径可以将学习进度、配置等存放到您的云同步同步盘或其它目录。
+                </p>
+              </div>
+            </div>
+          </section>
         </div>
 
         {/* 右侧栏：系统自定义快捷键 */}
@@ -420,6 +500,64 @@ interface SettingsProps {
           </section>
         </div>
       </div>
+
+      {/* 迁移询问弹窗 (Modal) */}
+      {showMigrateModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-[110] transition-all duration-300">
+          <div className="bg-white/95 backdrop-blur-xl border border-black/5 rounded-2xl p-6 w-[95%] max-w-md shadow-2xl animate-fade-in">
+            <div className="flex items-center gap-2.5 text-primary mb-3">
+              <span className="material-symbols-outlined text-[24px]">folder_shared</span>
+              <h3 className="font-bold text-sm text-on-surface">确定要切换数据存储路径吗？</h3>
+            </div>
+            
+            <div className="space-y-3 mb-5">
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                您选择了一个新的存储文件夹：
+              </p>
+              <div className="p-3 bg-black/[0.02] border border-black/5 rounded-xl text-xs font-mono break-all text-on-surface">
+                {newSelectedPath}
+              </div>
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                请选择您的数据迁移方案：
+              </p>
+              <div className="space-y-2 pt-1">
+                <div className="text-[11px] text-on-surface-variant flex gap-2 items-start bg-green-500/5 p-2 rounded-lg border border-green-500/10">
+                  <span className="material-symbols-outlined text-[13px] text-green-600 mt-0.5">info</span>
+                  <span><strong>一键移动数据 (推荐)：</strong>将当前已有的学习记录、进度及设置文件移动到新路径，原路径下的旧文件将被删除以防数据冲突。</span>
+                </div>
+                <div className="text-[11px] text-on-surface-variant flex gap-2 items-start bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
+                  <span className="material-symbols-outlined text-[13px] text-amber-600 mt-0.5">warning</span>
+                  <span><strong>仅切换路径：</strong>仅改变存储指向，不移动任何文件。若目标目录为空，将以全新数据运行。</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row justify-end gap-2">
+              <button
+                disabled={isMigrating}
+                onClick={() => setShowMigrateModal(false)}
+                className="order-3 sm:order-1 px-4 py-2 text-xs font-semibold text-on-surface-variant bg-black/[0.04] hover:bg-black/[0.08] active:scale-95 rounded-xl transition-all cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                disabled={isMigrating}
+                onClick={() => handleMigrate(false)}
+                className="order-2 sm:order-2 px-4 py-2 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 active:scale-95 rounded-xl transition-all cursor-pointer"
+              >
+                仅切换路径
+              </button>
+              <button
+                disabled={isMigrating}
+                onClick={() => handleMigrate(true)}
+                className="order-1 sm:order-3 px-4 py-2 text-xs font-bold text-white bg-primary hover:opacity-90 active:scale-95 rounded-xl transition-all shadow-md shadow-primary/10 cursor-pointer"
+              >
+                {isMigrating ? '迁移中...' : '一键移动数据'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 底部浮动通知 Toast */}
       <div className={`fixed bottom-10 right-10 flex items-center gap-3 bg-white/90 backdrop-blur-xl border border-black/5 px-5 py-3 rounded-xl shadow-xl transition-all duration-300 z-[100] ${

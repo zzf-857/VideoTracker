@@ -22,4 +22,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 代理 WebDAV 网络请求，避免跨域限制
   webdavRequest: (url: string, options: any) => ipcRenderer.invoke('webdav:request', url, options),
+
+  // 本地数据路径管理与迁移
+  getStoragePath: () => ipcRenderer.invoke('db:getStoragePath'),
+  migrateStorage: (newPath: string, moveData: boolean) => ipcRenderer.invoke('db:migrateStorage', newPath, moveData),
 });

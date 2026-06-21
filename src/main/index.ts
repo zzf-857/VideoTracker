@@ -8,10 +8,28 @@ let mainWindow: BrowserWindow | null = null;
 let streamServer: http.Server | null = null;
 let streamPort = 30005; // 本地流服务默认端口
 
+// 获取实际数据存储目录绝对路径
+const getStorageDirectory = () => {
+  const defaultPath = app.getPath('userData');
+  const configPathFile = path.join(defaultPath, 'path_config.json');
+  try {
+    if (fs.existsSync(configPathFile)) {
+      const configContent = fs.readFileSync(configPathFile, 'utf-8');
+      const config = JSON.parse(configContent);
+      if (config && config.storagePath && fs.existsSync(config.storagePath)) {
+        return config.storagePath;
+      }
+    }
+  } catch (err) {
+    console.error('Error reading path_config.json:', err);
+  }
+  return defaultPath;
+};
+
 // 数据文件路径
 const getDataFilePath = (key: string) => {
-  const userDataPath = app.getPath('userData');
-  return path.join(userDataPath, `${key}.json`);
+  const baseDir = getStorageDirectory();
+  return path.join(baseDir, `${key}.json`);
 };
 
 // 辅助函数：代理流式 HTTP 请求并自动跟踪 301/302 重定向（避开 Referer 和 CORS 限制）
@@ -354,6 +372,63 @@ app.whenReady().then(() => {
     } catch (err) {
       console.error(`Error reading data for key ${key}:`, err);
       return null;
+    }
+  });
+
+  // 获取当前数据存储路径
+  ipcMain.handle('db:getStoragePath', async () => {
+    return getStorageDirectory();
+  });
+
+  // 迁移数据存储路径
+  ipcMain.handle('db:migrateStorage', async (_event, newPath: string, moveData: boolean) => {
+    try {
+      if (!fs.existsSync(newPath)) {
+        return { success: false, error: '目标路径不存在' };
+      }
+      const stat = fs.statSync(newPath);
+      if (!stat.isDirectory()) {
+        return { success: false, error: '目标路径不是一个文件夹' };
+      }
+
+      const defaultPath = app.getPath('userData');
+      const currentPath = getStorageDirectory();
+
+      // 如果目标路径与当前路径相同，则直接返回成功
+      if (path.resolve(currentPath) === path.resolve(newPath)) {
+        return { success: true, message: '目标路径与当前路径相同' };
+      }
+
+      if (moveData) {
+        // 读取当前路径下的所有 .json 文件（除 path_config.json 外）
+        const files = fs.readdirSync(currentPath);
+        const jsonFiles = files.filter(f => f.endsWith('.json') && f !== 'path_config.json');
+
+        for (const file of jsonFiles) {
+          const srcFile = path.join(currentPath, file);
+          const destFile = path.join(newPath, file);
+          fs.copyFileSync(srcFile, destFile);
+        }
+
+        // 删除旧路径下的 .json 文件（避免多份数据造成混乱，仅在删除成功时记录日志）
+        for (const file of jsonFiles) {
+          const srcFile = path.join(currentPath, file);
+          try {
+            fs.unlinkSync(srcFile);
+          } catch (e) {
+            console.error(`Failed to delete old file: ${srcFile}`, e);
+          }
+        }
+      }
+
+      // 更新 path_config.json 指向新位置
+      const configPathFile = path.join(defaultPath, 'path_config.json');
+      fs.writeFileSync(configPathFile, JSON.stringify({ storagePath: newPath }, null, 2), 'utf-8');
+
+      return { success: true, newPath };
+    } catch (err: any) {
+      console.error('Migration error:', err);
+      return { success: false, error: err.message || '迁移失败，请检查文件夹读写权限' };
     }
   });
 

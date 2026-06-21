@@ -8,3 +8,4 @@ dist-electron/
 .idea/
 .env
 .env.local
+dist-package/
