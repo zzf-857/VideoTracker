@@ -300,7 +300,7 @@ export default function Sidebar({
             key={node.path}
             style={{ paddingLeft: `${depth * 12 + 20}px` }}
             onClick={() => handlePlayVideo(node)}
-            className={`relative flex flex-col items-start gap-0.5 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
+            className={`relative flex items-center gap-2.5 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
               isSelected ? 'bg-primary/10 text-primary font-semibold' : 'text-on-surface hover:bg-black/[0.03]'
             }`}
           >
@@ -310,15 +310,17 @@ export default function Sidebar({
                 style={{ width: `${percent}%` }}
               />
             )}
-            <div className="relative z-10 flex items-center gap-2 w-full">
-              {renderProgressIcon(node.path)}
-              <span className="text-sm truncate flex-1" title={node.name}>{node.name}</span>
+            
+            {renderProgressIcon(node.path)}
+            
+            <div className="relative z-10 flex-1 min-w-0 flex flex-col gap-0.5">
+              <span className="text-sm truncate w-full" title={node.name}>{node.name}</span>
+              {metaStr && (
+                <div className="text-[9px] text-on-surface-variant/50 font-mono">
+                  {metaStr}
+                </div>
+              )}
             </div>
-            {metaStr && (
-              <div className="relative z-10 text-[9px] text-on-surface-variant/50 font-mono pl-6 mt-0.5">
-                {metaStr}
-              </div>
-            )}
           </div>
         );
       }
@@ -496,7 +498,7 @@ export default function Sidebar({
                       <div
                         key={video.path}
                         onClick={() => handlePlayVideo(video)}
-                        className={`relative flex flex-col items-start gap-0.5 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
+                        className={`relative flex items-center gap-2.5 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
                           isSelected ? 'bg-primary/10 text-primary font-semibold' : 'text-on-surface hover:bg-black/[0.03]'
                         }`}
                       >
@@ -506,15 +508,17 @@ export default function Sidebar({
                             style={{ width: `${percent}%` }}
                           />
                         )}
-                        <div className="relative z-10 flex items-center gap-2.5 w-full">
-                          {renderProgressIcon(video.path)}
-                          <span className="text-xs truncate flex-1" title={video.name}>{video.name}</span>
+                        
+                        {renderProgressIcon(video.path)}
+                        
+                        <div className="relative z-10 flex-1 min-w-0 flex flex-col gap-0.5">
+                          <span className="text-xs truncate w-full" title={video.name}>{video.name}</span>
+                          {metaStr && (
+                            <div className="relative z-10 text-[9px] text-on-surface-variant/50 font-mono">
+                              {metaStr}
+                            </div>
+                          )}
                         </div>
-                        {metaStr && (
-                          <div className="relative z-10 text-[9px] text-on-surface-variant/50 font-mono pl-6.5 mt-0.5 ml-0.5">
-                            {metaStr}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
