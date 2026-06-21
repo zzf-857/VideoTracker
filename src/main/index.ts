@@ -316,7 +316,6 @@ function createWindow() {
       preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false, // 关闭跨域安全限制，允许隐藏 video 和 canvas 完美截图
       backgroundThrottling: false, // 禁用后台限频，确保窗口在失焦/后台时定时器依然精准无阻地走字
     },
   });

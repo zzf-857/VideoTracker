@@ -105,6 +105,7 @@ export default function App() {
     const video = document.createElement('video');
     video.src = activeVideoUrl;
     video.muted = true;
+    video.crossOrigin = 'anonymous';
 
     const generateNext = async (): Promise<void> => {
       if (queueRef.current.length === 0) return;
@@ -461,6 +462,7 @@ export default function App() {
         const video = document.createElement('video');
         video.preload = 'metadata';
         video.src = url;
+        video.crossOrigin = 'anonymous';
 
         const timeout = setTimeout(() => {
           cleanup();
