@@ -548,10 +548,10 @@ export default function Player({
 
   // 3. 监听全局自定义快捷键（排除输入法和表单聚焦状态）
   useEffect(() => {
-    const art = playerInstanceRef.current;
-    if (!art) return;
-
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const art = playerInstanceRef.current;
+      if (!art) return;
+
       const activeEl = document.activeElement;
       if (activeEl && (
         activeEl.tagName === 'INPUT' || 
