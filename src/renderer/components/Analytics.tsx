@@ -395,7 +395,7 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
 
             {/* 数据概览卡片 - 移除 apple-card 防止背景颜色被 rgba(255,255,255,0.8) 覆盖 */}
             <section className="p-6 rounded-2xl bg-[#1D1D1F] text-white relative overflow-hidden group border border-black/5 shadow-sm shadow-black/10 flex flex-row items-center justify-between gap-6 min-h-[160px]">
-              <div className="relative z-10 flex-1 max-w-[65%]">
+              <div className="relative z-10 flex-1 max-w-[60%]">
                 <span className="text-white/60 font-bold text-[9px] uppercase tracking-wider">总览看板</span>
                 <h4 className="text-xl font-headline font-extrabold text-white mt-2">专注达成</h4>
                 <p className="text-white/70 text-xs mt-2.5 leading-relaxed">
@@ -405,45 +405,80 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                 </p>
               </div>
               
-              <div className="relative flex items-center justify-center pr-2 select-none w-[110px] h-[110px] shrink-0">
+              <div className="relative flex items-center justify-center select-none w-[170px] h-[150px] shrink-0 overflow-visible">
                 {/* 奖杯发光背景 */}
-                <div className="absolute w-20 h-20 rounded-full bg-primary/20 blur-xl group-hover:bg-primary/30 transition-all duration-500 animate-pulse pointer-events-none" />
-                <svg viewBox="0 0 100 100" className="w-24 h-24 animate-float relative z-10 drop-shadow-[0_4px_12px_rgba(245,166,35,0.3)]">
-                  <defs>
-                    <linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#FFE066" />
-                      <stop offset="30%" stopColor="#F5A623" />
-                      <stop offset="70%" stopColor="#D0021B" />
-                      <stop offset="100%" stopColor="#F8E71C" />
-                    </linearGradient>
-                    <linearGradient id="star-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#FFF" />
-                      <stop offset="100%" stopColor="#F5A623" />
-                    </linearGradient>
-                  </defs>
-                  
-                  {/* 底部基座 */}
-                  <path d="M25 80 L75 80 L70 70 L30 70 Z" fill="#2C2C2E" stroke="#48484A" strokeWidth="1" />
-                  <rect x="35" y="80" width="30" height="5" rx="1.5" fill="#1C1C1E" />
-                  
-                  {/* 支架/颈部 */}
-                  <path d="M42 70 L58 70 L54 58 L46 58 Z" fill="url(#gold-grad)" />
-                  <ellipse cx="50" cy="58" rx="8" ry="2" fill="#D0021B" opacity="0.3" />
+                <div className="absolute w-28 h-28 rounded-full bg-primary/20 blur-2xl group-hover:bg-primary/30 transition-all duration-500 animate-pulse pointer-events-none" />
+                
+                {/* 星星装饰背景（不旋转，保持水平闪烁） */}
+                <div className="absolute inset-0 pointer-events-none z-0">
+                  {/* 左上星 */}
+                  <svg className="absolute top-2 left-2 w-4 h-4 text-amber-200 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                  {/* 右下星 */}
+                  <svg className="absolute bottom-4 right-1 w-3.5 h-3.5 text-yellow-100 animate-pulse" style={{ animationDelay: '0.4s' }} viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                  {/* 顶部中央星 */}
+                  <svg className="absolute top-1 right-8 w-3 h-3 text-white animate-pulse" style={{ animationDelay: '0.8s' }} viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                </div>
 
-                  {/* 杯身 */}
-                  <path d="M30 25 C30 25 30 50 50 55 C70 50 70 25 70 25 Z" fill="url(#gold-grad)" />
-                  <path d="M50 25 C50 25 50 50 50 55 C50 50 70 25 70 25 Z" fill="#FFE066" opacity="0.2" /> {/* 高光 */}
+                {/* 奖杯容器：浮动、旋转15度，hover时放大且旋转增至20度 */}
+                <div className="w-[145px] h-[145px] animate-float transform rotate-[15deg] group-hover:rotate-[20deg] group-hover:scale-110 transition-all duration-500 relative z-10 flex items-center justify-center">
+                  <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-[0_10px_20px_rgba(255,179,0,0.35)]">
+                    <defs>
+                      {/* 金色渐变：纯粹以金色为主 */}
+                      <linearGradient id="cup-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#FFF9C4" /> {/* 浅亮金 */}
+                        <stop offset="35%" stopColor="#FBC02D" /> {/* 黄金 */}
+                        <stop offset="75%" stopColor="#F57F17" /> {/* 深橘金 */}
+                        <stop offset="100%" stopColor="#FBC02D" />
+                      </linearGradient>
+                      <linearGradient id="inner-gold" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#F57F17" />
+                        <stop offset="100%" stopColor="#FBC02D" />
+                      </linearGradient>
+                      <linearGradient id="base-metal" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#424242" />
+                        <stop offset="50%" stopColor="#757575" />
+                        <stop offset="100%" stopColor="#212121" />
+                      </linearGradient>
+                    </defs>
 
-                  {/* 杯耳 (左) */}
-                  <path d="M30 30 C20 30 20 45 30 48 M30 34 C24 34 24 42 30 44" fill="none" stroke="url(#gold-grad)" strokeWidth="3" strokeLinecap="round" />
-                  {/* 杯耳 (右) */}
-                  <path d="M70 30 C80 30 80 45 70 48 M70 34 C76 34 76 42 70 44" fill="none" stroke="url(#gold-grad)" strokeWidth="3" strokeLinecap="round" />
+                    {/* 奖杯底座 (多层拉丝质感) */}
+                    <path d="M22 80 L78 80 L74 68 L26 68 Z" fill="url(#base-metal)" stroke="#616161" strokeWidth="0.5" />
+                    <rect x="30" y="80" width="40" height="6" rx="2" fill="#212121" />
+                    <rect x="34" y="86" width="32" height="4" rx="1" fill="#0D0D0D" />
 
-                  {/* 星星闪烁 (装饰) */}
-                  <path d="M22 15 L24 20 L29 21 L24 22 L22 27 L20 22 L15 21 L20 20 Z" fill="url(#star-grad)" className="animate-pulse" style={{ animationDelay: '0.2s' }} />
-                  <path d="M78 12 L79.5 16 L83.5 17 L79.5 18 L78 22 L76.5 18 L72.5 17 L76.5 16 Z" fill="url(#star-grad)" className="animate-pulse" style={{ animationDelay: '0.8s' }} />
-                  <path d="M50 15 L51 18 L54 18.5 L51 19 L50 22 L49 19 L46 18.5 L49 18 Z" fill="#FFF" className="animate-pulse" />
-                </svg>
+                    {/* 支架/颈部 */}
+                    <path d="M44 68 L56 68 L53 52 L47 52 Z" fill="url(#cup-gold)" />
+                    <ellipse cx="50" cy="52" rx="6" ry="1.5" fill="#E65100" opacity="0.4" />
+                    <path d="M40 68 L60 68 L50 64 Z" fill="#F57F17" opacity="0.3" />
+
+                    {/* 杯身 */}
+                    <path d="M24 20 C24 20 22 48 50 52 C78 48 76 20 76 20 Z" fill="url(#cup-gold)" />
+                    
+                    {/* 杯口深度阴影 */}
+                    <ellipse cx="50" cy="20" rx="26" ry="5" fill="url(#inner-gold)" />
+                    
+                    {/* 杯口边缘亮线 */}
+                    <ellipse cx="50" cy="20" rx="26" ry="5" fill="none" stroke="#FFF9C4" strokeWidth="1" />
+
+                    {/* 杯身左侧高光 */}
+                    <path d="M25 21 C25 21 23.5 45 50 49.5 C28 47 27 23 27 21 Z" fill="#FFFFFF" opacity="0.25" />
+
+                    {/* 双杯耳 (左) */}
+                    <path d="M24 24 C14 24 12 40 24 44 C16 42 16 28 24 28" fill="none" stroke="url(#cup-gold)" strokeWidth="4" strokeLinecap="round" />
+                    {/* 双杯耳 (右) */}
+                    <path d="M76 24 C86 24 88 40 76 44 C84 42 84 28 76 28" fill="none" stroke="url(#cup-gold)" strokeWidth="4" strokeLinecap="round" />
+
+                    {/* 奖杯中央的胜利之星 */}
+                    <path d="M50 26 L53 32 L60 33 L55 38 L56 45 L50 41 L44 45 L45 38 L40 33 L47 32 Z" fill="#FFF9C4" stroke="#E65100" strokeWidth="0.5" />
+                    <path d="M50 26 L50 41 L44 45 L45 38 L40 33 L47 32 Z" fill="#FBC02D" opacity="0.5" />
+                  </svg>
+                </div>
               </div>
             </section>
           </div>
