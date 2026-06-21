@@ -395,13 +395,36 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
 
             {/* 数据概览卡片 - 移除 apple-card 防止背景颜色被 rgba(255,255,255,0.8) 覆盖 */}
             <section className="p-6 rounded-2xl bg-[#1D1D1F] text-white relative group border border-black/5 shadow-sm shadow-black/10 flex flex-row items-center justify-between gap-6 min-h-[160px]">
-              <div className="relative z-10 flex-1 max-w-[60%]">
-                <span className="text-white/60 font-bold text-[9px] uppercase tracking-wider">总览看板</span>
-                <h4 className="text-xl font-headline font-extrabold text-white mt-2">专注达成</h4>
-                <p className="text-white/70 text-xs mt-2.5 leading-relaxed">
-                  您已累计学习了 <span className="text-primary font-extrabold text-sm bg-white/10 px-2 py-0.5 rounded">{formatValue(totalSeconds)}</span> {getUnitLabel()}。<br />
-                  最长连续学习天数：<span className="text-primary font-extrabold text-sm bg-white/10 px-2 py-0.5 rounded">{longestStreak}</span> 天。<br />
-                  坚持这个节奏，终将学有所成！
+              <div className="relative z-10 flex-1 flex flex-col justify-between h-full gap-4">
+                <div>
+                  <span className="text-white/50 font-bold text-xs uppercase tracking-wider">总览看板</span>
+                  <h4 className="text-3xl font-headline font-extrabold text-white mt-1.5 tracking-tight">专注达成</h4>
+                </div>
+                
+                {/* 核心数据指标块，并排展示，填充中间空白 */}
+                <div className="flex items-center gap-10 mt-1">
+                  <div className="flex flex-col">
+                    <span className="text-white/40 text-[10px] font-bold tracking-wider uppercase">累计学习时长</span>
+                    <div className="flex items-baseline gap-1 mt-1.5">
+                      <span className="text-4xl font-extrabold text-primary tracking-tight">{formatValue(totalSeconds)}</span>
+                      <span className="text-xs text-white/50 font-semibold">{getUnitLabel()}</span>
+                    </div>
+                  </div>
+                  
+                  {/* 半透明垂直分割线 */}
+                  <div className="w-[1px] h-10 bg-white/10 self-center" />
+                  
+                  <div className="flex flex-col">
+                    <span className="text-white/40 text-[10px] font-bold tracking-wider uppercase">历史最长连续</span>
+                    <div className="flex items-baseline gap-1 mt-1.5">
+                      <span className="text-4xl font-extrabold text-primary tracking-tight">{longestStreak}</span>
+                      <span className="text-xs text-white/50 font-semibold">天</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <p className="text-white/50 text-xs mt-1 font-medium tracking-wide">
+                  坚持这个节奏，终将学有所成！✨
                 </p>
               </div>
               
