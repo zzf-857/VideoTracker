@@ -6,7 +6,6 @@ import LogCalendar from './components/LogCalendar';
 import SourceManager from './components/SourceManager';
 import Settings from './components/Settings';
 import Analytics from './components/Analytics';
-import PipPlayer from './components/PipPlayer';
 
 import { storageService, AppDataStore, MediaSourceConfig, VideoProgress } from './services/storage';
 import { useTimer } from './hooks/useTimer';
@@ -23,12 +22,6 @@ export interface TreeNode {
 }
 
 export default function App() {
-  // 检查是否是画中画浮窗窗口模式
-  const isPipMode = typeof window !== 'undefined' && window.location.search.includes('mode=pip');
-  if (isPipMode) {
-    return <PipPlayer />;
-  }
-
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [appData, setAppData] = useState<AppDataStore | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.25);

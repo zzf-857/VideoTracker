@@ -105,6 +105,13 @@ export function useTimer({
     checkIdleIntervalRef.current = setInterval(() => {
       if (!isPlayingRef.current) return;
 
+      // 如果当前视频处于原生画中画（PIP）浮窗播放模式，则自动重置活动时间，免除挂机超时判定
+      const isPipActive = typeof document !== 'undefined' && document.pictureInPictureElement !== null;
+      if (isPipActive) {
+        lastActivityTimeRef.current = Date.now();
+        return;
+      }
+
       const idleMs = Date.now() - lastActivityTimeRef.current;
       const timeoutMs = idleTimeoutMinutes * 60 * 1000;
 

@@ -82,3 +82,7 @@
 *   **feat: 支持自定义置顶悬浮播放器小窗口，解决非激活态挂机不计时，支持取消置顶与退出唤醒聚焦** (c81b14b)
     *   **时间**: 2026-06-21
     *   **描述**: 1. preload.ts 暴露置顶与小窗控制方法；2. index.ts 注册 pip 独立无边框 BrowserWindow 并通过 query 串无感传参，监听 window.closed 自动 mainWindow.show/focus 唤醒聚焦；3. 编写 PipPlayer.tsx 独立页面在置顶小窗下播放，将 idleTimeoutMinutes 设大以实际上免除挂机检测，支持拖拽、开启/取消置顶按钮与进度存储；4. App.tsx 根据 ?mode=pip 分流加载浮窗，Player.tsx 自定义 PiP 控制图标，并在 window.closed 时自动同步最新播放时间点。
+
+*   **feat: 回归原生画中画播放，优化原生PiP下自动累加计时和退出画中画时唤醒聚焦主程序** (f740a77)
+    *   **时间**: 2026-06-21
+    *   **描述**: 1. 回滚主进程 pip 独立子窗口的所有代码，并注册通用的 window:focus 唤醒聚焦 IPC 通道；2. preload.ts 只暴露 focusMainWindow 方法，清理 App.tsx 路由分流与 PipPlayer.tsx 物理文件；3. 开启 ArtPlayer 原生画中画 (pip: true)，监听 video:leavepictureinpicture 原生事件，在画中画退出时调用 focusMainWindow 自动聚焦唤起主程序；4. useTimer.ts 定时器中检测到 document.pictureInPictureElement 时自动刷新活跃时间，免除闲置防挂机超时，保证原生画中画下正常记录学习时长。

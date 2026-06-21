@@ -5,7 +5,6 @@ import * as http from 'http';
 import * as crypto from 'crypto';
 
 let mainWindow: BrowserWindow | null = null;
-let pipWindow: BrowserWindow | null = null;
 let streamServer: http.Server | null = null;
 let streamPort = 30005; // 本地流服务默认端口
 
@@ -272,68 +271,11 @@ app.whenReady().then(() => {
     return `http://127.0.0.1:${streamPort}/video?path=${encodeURIComponent(base64Path)}`;
   });
 
-  // 悬浮窗画中画 IPC 注册
-  ipcMain.handle('pip:open', async (_event, params: { url: string, path: string, name: string, currentTime: number }) => {
-    if (pipWindow) {
-      try {
-        pipWindow.close();
-      } catch (e) {}
-    }
-
-    const { url, path: videoPath, name, currentTime } = params;
-
-    pipWindow = new BrowserWindow({
-      width: 480,
-      height: 270,
-      frame: false, // 无边框
-      alwaysOnTop: true, // 置顶
-      resizable: true,
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    });
-
-    const query = `?mode=pip&videoUrl=${encodeURIComponent(url)}&videoPath=${encodeURIComponent(videoPath)}&videoName=${encodeURIComponent(name)}&currentTime=${currentTime}`;
-
-    if (!app.isPackaged) {
-      pipWindow.loadURL(`http://127.0.0.1:5173/${query}`);
-    } else {
-      pipWindow.loadFile(path.join(__dirname, '../dist/index.html'), { 
-        query: { 
-          mode: 'pip', 
-          videoUrl: url, 
-          videoPath, 
-          videoName: name, 
-          currentTime: String(currentTime) 
-        } 
-      });
-    }
-
-    pipWindow.on('closed', () => {
-      pipWindow = null;
-      if (mainWindow) {
-        mainWindow.show();
-        mainWindow.focus();
-        mainWindow.webContents.send('pip:closed', { videoPath });
-      }
-    });
-
-    return true;
-  });
-
-  ipcMain.handle('pip:setAlwaysOnTop', (_event, alwaysOnTop: boolean) => {
-    if (pipWindow) {
-      pipWindow.setAlwaysOnTop(alwaysOnTop);
-      return true;
-    }
-    return false;
-  });
-
-  ipcMain.handle('pip:close', () => {
-    if (pipWindow) {
-      pipWindow.close();
+  // 唤起并聚焦主窗口
+  ipcMain.handle('window:focus', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
       return true;
     }
     return false;
