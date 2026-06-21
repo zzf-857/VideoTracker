@@ -96,12 +96,12 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
     return unit === 'minute' ? '分钟' : '小时';
   };
 
-  // 生成热力图数据（全尺寸网格，支持 days 天数，每列 7 个格子）
-  const getHeatmapGrid = (days: number) => {
+  // 生成年度热力图数据（全尺寸网格，永远固定为 365天，共53列）
+  const getFullYearGrid = () => {
     const today = new Date();
     const grid = [];
     
-    for (let i = days - 1; i >= 0; i--) {
+    for (let i = 364; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
@@ -118,19 +118,20 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
         dateStr,
         duration,
         bgClass,
-        dayOfWeek: date.getDay()
+        dayOfWeek: date.getDay(),
+        daysAgo: i
       });
     }
     return grid;
   };
 
-  const gridData = getHeatmapGrid(daysRange);
+  const gridData = getFullYearGrid();
   const columns: typeof gridData[] = [];
   let currentColumn: typeof gridData = [];
 
   const firstDay = gridData.length > 0 ? gridData[0].dayOfWeek : 0;
   for (let i = 0; i < firstDay; i++) {
-    currentColumn.push({ dateStr: '', duration: 0, bgClass: 'opacity-0 pointer-events-none', dayOfWeek: i });
+    currentColumn.push({ dateStr: '', duration: 0, bgClass: 'opacity-0 pointer-events-none', dayOfWeek: i, daysAgo: 999 });
   }
 
   for (const cell of gridData) {
@@ -142,7 +143,7 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
   }
   if (currentColumn.length > 0) {
     while (currentColumn.length < 7) {
-      currentColumn.push({ dateStr: '', duration: 0, bgClass: 'opacity-0 pointer-events-none', dayOfWeek: currentColumn.length });
+      currentColumn.push({ dateStr: '', duration: 0, bgClass: 'opacity-0 pointer-events-none', dayOfWeek: currentColumn.length, daysAgo: 999 });
     }
     columns.push(currentColumn);
   }
@@ -188,33 +189,13 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
   };
   const rangeStats = getRangeStats(daysRange);
 
-  // 动态格子自适应配置 (铺满固定区间，扁平科技感)
+  // 年度热力图固定正方形格子尺寸配置
   const heatmapConfig = {
-    30: {
-      cellClass: 'w-full h-7 rounded-md',
-      colStyle: { flex: '1 1 0%', minWidth: '40px' },
-      gapClass: 'gap-1.5',
-      containerGapClass: 'gap-1.5'
-    },
-    90: {
-      cellClass: 'w-full h-5 rounded-[4px]',
-      colStyle: { flex: '1 1 0%', minWidth: '18px' },
-      gapClass: 'gap-1',
-      containerGapClass: 'gap-1'
-    },
-    180: {
-      cellClass: 'w-full h-4 rounded-[3px]',
-      colStyle: { flex: '1 1 0%', minWidth: '12px' },
-      gapClass: 'gap-1',
-      containerGapClass: 'gap-1'
-    },
-    365: {
-      cellClass: 'w-full h-2.5 rounded-[2px]',
-      colStyle: { flex: '1 1 0%', minWidth: '6px' },
-      gapClass: 'gap-1',
-      containerGapClass: 'gap-1'
-    }
-  }[daysRange];
+    cellClass: 'w-3 h-3 rounded-sm',
+    gapClass: 'gap-1',
+    containerGapClass: 'gap-1',
+    cellWidth: '12px'
+  };
 
   // 整理所有历史日志时间轴数据
   const getAllLogsSorted = () => {
@@ -350,34 +331,36 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
           </div>
 
           <div className="flex flex-col gap-1.5 overflow-x-auto pb-2 custom-scrollbar">
-            {/* 网格区：宽度 w-full，平分列宽，格子 w-full 自适应大小 */}
-            <div className={`flex ${heatmapConfig.containerGapClass} w-full min-w-max pb-1`}>
+            {/* 网格区：宽度 w-fit 保持经典紧凑对齐，且带有时光聚光灯高亮动效 */}
+            <div className={`flex ${heatmapConfig.containerGapClass} w-fit pb-1`}>
               {columns.map((column, colIdx) => (
-                <div 
-                  key={colIdx} 
-                  style={heatmapConfig.colStyle} 
-                  className={`flex flex-col ${heatmapConfig.gapClass}`}
-                >
+                <div key={colIdx} className={`flex flex-col ${heatmapConfig.gapClass}`}>
                   {column.map((cell, cellIdx) => (
                     <div
                       key={cellIdx}
-                      className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-200`}
-                      title={cell.dateStr ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
+                      className={`heatmap-cell ${cell.bgClass} ${heatmapConfig.cellClass} transition-all duration-300 ${
+                        cell.daysAgo >= daysRange 
+                          ? 'opacity-15 pointer-events-none scale-[0.95] saturate-50' 
+                          : 'opacity-100'
+                      }`}
+                      title={cell.dateStr && cell.daysAgo < daysRange ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
                     />
                   ))}
                 </div>
               ))}
             </div>
             
-            {/* 动态月份底部标识：均分和宽度与上方列完全一致，保证完美的列对齐 */}
-            <div className={`flex ${heatmapConfig.containerGapClass} w-full min-w-max mt-2 select-none`}>
-              {monthLabels.map((label, idx) => (
+            {/* 动态月份底部标识：列同步紧凑排布，超出激活天数段的月份设为半透明 */}
+            <div className={`flex ${heatmapConfig.containerGapClass} mt-2 select-none w-fit`}>
+              {monthLabels.map((item, idx) => (
                 <div
                   key={idx}
-                  style={heatmapConfig.colStyle}
-                  className="text-[9px] font-bold text-on-surface-variant text-left overflow-visible whitespace-nowrap"
+                  style={{ width: heatmapConfig.cellWidth }}
+                  className={`text-[9px] font-bold text-on-surface-variant text-left overflow-visible whitespace-nowrap transition-opacity duration-300 ${
+                    item.isDim ? 'opacity-20' : 'opacity-80'
+                  }`}
                 >
-                  {label}
+                  {item.label}
                 </div>
               ))}
             </div>
