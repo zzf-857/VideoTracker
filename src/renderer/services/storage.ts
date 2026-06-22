@@ -47,6 +47,7 @@ export interface AppSettings {
   webdavUser?: string;
   webdavPassword?: string;
   hotkeys: AppHotkeys;
+  pauseOnBlur?: boolean; // 失去焦点自动暂停播放，默认 true
 }
 
 // 统一数据接口
@@ -75,7 +76,8 @@ const DEFAULT_DATA: AppDataStore = {
       speedUp: 'c',
       speedDown: 'x',
       speedReset: 'z'
-    }
+    },
+    pauseOnBlur: true
   },
   timelines: {}
 };
@@ -117,7 +119,8 @@ class StorageService {
           speedUp: 'c',
           speedDown: 'x',
           speedReset: 'z'
-        }
+        },
+        pauseOnBlur: this.cache?.settings?.pauseOnBlur ?? true
       },
       timelines: this.cache?.timelines || {},
       lastPlayedVideo: this.cache?.lastPlayedVideo

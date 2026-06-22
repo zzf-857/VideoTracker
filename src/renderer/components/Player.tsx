@@ -469,20 +469,30 @@ export default function Player({
 
     // 失去/重新获得焦点自动暂停与恢复
     const handleWindowBlur = () => {
-      if (art && art.playing) {
-        wasPlayingBeforeBlur.current = true;
-        art.pause();
-        saveProgressForce(); // 失去焦点暂停并强制保存
-      } else {
-        wasPlayingBeforeBlur.current = false;
-      }
+      storageService.loadData().then(data => {
+        const pauseOnBlur = data.settings.pauseOnBlur ?? true;
+        if (!pauseOnBlur) return;
+
+        if (art && art.playing) {
+          wasPlayingBeforeBlur.current = true;
+          art.pause();
+          saveProgressForce(); // 失去焦点暂停并强制保存
+        } else {
+          wasPlayingBeforeBlur.current = false;
+        }
+      });
     };
 
     const handleWindowFocus = () => {
-      if (wasPlayingBeforeBlur.current && art) {
-        art.play().catch(err => console.warn('Auto-resume failed on window focus:', err));
-        wasPlayingBeforeBlur.current = false;
-      }
+      storageService.loadData().then(data => {
+        const pauseOnBlur = data.settings.pauseOnBlur ?? true;
+        if (!pauseOnBlur) return;
+
+        if (wasPlayingBeforeBlur.current && art) {
+          art.play().catch(err => console.warn('Auto-resume failed on window focus:', err));
+          wasPlayingBeforeBlur.current = false;
+        }
+      });
     };
 
     // 监听窗口关闭/刷新事件，防止数据丢失

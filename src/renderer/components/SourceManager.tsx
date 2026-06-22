@@ -31,10 +31,41 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
   // 编辑挂载源名称状态
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [editingSource, setEditingSource] = useState<MediaSourceConfig | null>(null);
 
   const startEditing = (id: string, name: string) => {
     setEditingId(id);
     setEditingName(name);
+  };
+
+  const handleStartEditSource = (source: MediaSourceConfig) => {
+    setEditingSource(source);
+    setNewSourceName(source.name);
+    setNewSourceType(source.type);
+    if (source.type === 'local') {
+      setLocalPath(source.path);
+      setWebdavUrl('');
+      setWebdavUser('');
+      setWebdavPassword('');
+      setSelectedPath('');
+    } else {
+      setLocalPath('');
+      setWebdavUrl(source.settings?.url || '');
+      setWebdavUser(source.settings?.username || '');
+      setWebdavPassword(source.settings?.password || '');
+      
+      let pathname = '';
+      try {
+        pathname = new URL(source.path).pathname;
+        pathname = decodeURIComponent(pathname);
+      } catch {
+        pathname = source.path;
+      }
+      setSelectedPath(pathname);
+    }
+    setTestStatus('idle');
+    setFolderBrowserOpen(false);
+    setIsModalOpen(true);
   };
 
   const handleSaveEditedName = async (id: string) => {
@@ -182,18 +213,98 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
       };
     }
 
-    const newSource: MediaSourceConfig = {
-      id: Date.now().toString(),
-      name: newSourceName,
-      type: newSourceType,
-      path: sourcePath,
-      settings
-    };
-
     const data = await storageService.loadData();
-    const updatedSources = [...data.sources, newSource];
-    
-    await storageService.saveData({ sources: updatedSources });
+    const oldPath = editingSource ? editingSource.path : '';
+    const newPath = sourcePath;
+
+    // 如果是编辑模式，且路径发生改变，需要迁移所有相关的播放进度、时间轴及日志数据
+    if (editingSource && oldPath && newPath && oldPath !== newPath) {
+      // 对于 WebDAV/Alist，进度 Key 存储的是解密/解码后的相对路径（如 /dav/123网盘/观影区/），需要使用相对路径进行匹配和迁移
+      let migrateOld = oldPath;
+      let migrateNew = newPath;
+      if (editingSource.type !== 'local') {
+        try {
+          migrateOld = decodeURIComponent(new URL(oldPath).pathname);
+          migrateNew = decodeURIComponent(new URL(newPath).pathname);
+        } catch {}
+      }
+
+      // 1. 迁移 progress 键值
+      const updatedProgress: Record<string, VideoProgress> = {};
+      for (const [key, val] of Object.entries(data.progress)) {
+        if (key.startsWith(migrateOld)) {
+          const newKey = migrateNew + key.slice(migrateOld.length);
+          updatedProgress[newKey] = val;
+        } else {
+          updatedProgress[key] = val;
+        }
+      }
+      data.progress = updatedProgress;
+
+      // 2. 迁移 timelines 键值
+      if (data.timelines) {
+        const updatedTimelines: Record<string, string> = {};
+        for (const [key, val] of Object.entries(data.timelines)) {
+          if (key.startsWith(migrateOld)) {
+            const newKey = migrateNew + key.slice(migrateOld.length);
+            updatedTimelines[newKey] = val;
+          } else {
+            updatedTimelines[key] = val;
+          }
+        }
+        data.timelines = updatedTimelines;
+      }
+
+      // 3. 迁移 lastPlayedVideo 路径
+      if (data.lastPlayedVideo && data.lastPlayedVideo.path.startsWith(migrateOld)) {
+        data.lastPlayedVideo.path = migrateNew + data.lastPlayedVideo.path.slice(migrateOld.length);
+      }
+
+      // 4. 迁移 dailyLogs 里的已播视频路径
+      if (data.dailyLogs) {
+        for (const dateKey of Object.keys(data.dailyLogs)) {
+          const log = data.dailyLogs[dateKey];
+          if (log && log.playedVideos) {
+            log.playedVideos = log.playedVideos.map(video => {
+              if (video.path.startsWith(migrateOld)) {
+                return {
+                  ...video,
+                  path: migrateNew + video.path.slice(migrateOld.length)
+                };
+              }
+              return video;
+            });
+          }
+        }
+      }
+    }
+
+    let updatedSources;
+    if (editingSource) {
+      updatedSources = data.sources.map(s => {
+        if (s.id === editingSource.id) {
+          return {
+            ...s,
+            name: newSourceName,
+            type: newSourceType,
+            path: sourcePath,
+            settings
+          };
+        }
+        return s;
+      });
+    } else {
+      const newSource: MediaSourceConfig = {
+        id: Date.now().toString(),
+        name: newSourceName,
+        type: newSourceType,
+        path: sourcePath,
+        settings
+      };
+      updatedSources = [...data.sources, newSource];
+    }
+
+    await storageService.saveData({ ...data, sources: updatedSources });
     
     // 重置并关闭
     resetForm();
@@ -222,6 +333,7 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
     setBreadcrumbs([]);
     setBrowserItems([]);
     setSelectedPath('');
+    setEditingSource(null);
     setIsModalOpen(false);
   };
 
@@ -283,6 +395,13 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
               {/* 操作按钮组 */}
               <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
                 <button
+                  onClick={() => handleStartEditSource(source)}
+                  className="w-8 h-8 rounded-full hover:bg-black/[0.04] text-on-surface-variant flex items-center justify-center transition-all cursor-pointer"
+                  title="重新配置数据源"
+                >
+                  <span className="material-symbols-outlined text-[16px]">settings</span>
+                </button>
+                <button
                   onClick={() => startEditing(source.id, source.name)}
                   className="w-8 h-8 rounded-full hover:bg-black/[0.04] text-on-surface-variant flex items-center justify-center transition-all cursor-pointer"
                   title="修改名称"
@@ -299,8 +418,8 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
               </div>
             </div>
 
-            <div className="mt-2 text-xs font-mono text-on-surface-variant truncate bg-black/[0.02] p-2 rounded-lg border border-black/5">
-              路径: {source.path}
+            <div className="mt-2 text-xs font-mono text-on-surface-variant truncate bg-black/[0.02] p-2 rounded-lg border border-black/5" title={decodeURIComponent(source.path)}>
+              路径: {decodeURIComponent(source.path)}
             </div>
 
             <div className="mt-4 pt-3 border-t border-black/5 flex justify-between items-center text-[11px] text-on-surface-variant">
@@ -326,8 +445,10 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
           <div className="glass-panel-dark text-white rounded-2xl w-full max-w-[480px] p-6 shadow-2xl animate-fade-in relative border border-white/10">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined">add_box</span>
-              添加新视频源
+              <span className="material-symbols-outlined">
+                {editingSource ? 'settings' : 'add_box'}
+              </span>
+              {editingSource ? '编辑挂载源' : '添加新视频源'}
             </h3>
 
             <form onSubmit={handleSaveSource} className="space-y-4">
@@ -547,7 +668,7 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
                   type="submit"
                   className="px-5 py-2 bg-primary rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all text-white"
                 >
-                  确定添加
+                  {editingSource ? '确定保存' : '确定添加'}
                 </button>
               </div>
             </form>

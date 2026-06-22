@@ -14,7 +14,8 @@ interface SettingsProps {
       speedUp: 'c',
       speedDown: 'x',
       speedReset: 'z'
-    }
+    },
+    pauseOnBlur: true
   });
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle');
   const [syncMsg, setSyncMsg] = useState('');
@@ -26,6 +27,7 @@ interface SettingsProps {
   const [webdavPassword, setWebdavPassword] = useState('');
   const [idleTimeout, setIdleTimeout] = useState(15);
   const [autoSync, setAutoSync] = useState(false);
+  const [pauseOnBlur, setPauseOnBlur] = useState(true);
 
   // 当前正在录制的快捷键字段名
   const [activeHotkeyKey, setActiveHotkeyKey] = useState<string | null>(null);
@@ -42,6 +44,7 @@ interface SettingsProps {
       setSettings(data.settings);
       setIdleTimeout(data.settings.idleTimeout || 15);
       setAutoSync(data.settings.autoSync || false);
+      setPauseOnBlur(data.settings.pauseOnBlur ?? true);
       setWebdavUrl(data.settings.webdavSyncUrl || '');
       setWebdavUser(data.settings.webdavUser || '');
       setWebdavPassword(data.settings.webdavPassword || '');
@@ -83,10 +86,12 @@ interface SettingsProps {
         speedUp: 'c',
         speedDown: 'x',
         speedReset: 'z'
-      }
+      },
+      pauseOnBlur: true
     };
     setIdleTimeout(15);
     setAutoSync(false);
+    setPauseOnBlur(true);
     setWebdavUrl('');
     setWebdavUser('');
     setWebdavPassword('');
@@ -230,6 +235,7 @@ interface SettingsProps {
     const currentSettings: AppSettings = {
       idleTimeout,
       autoSync,
+      pauseOnBlur,
       webdavSyncUrl: webdavUrl,
       webdavUser,
       webdavPassword,
@@ -392,6 +398,25 @@ interface SettingsProps {
                   onTouchEnd={() => handleSaveSettings({ idleTimeout })}
                   className="w-full cursor-pointer accent-primary"
                 />
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-black/5">
+                <div>
+                  <p className="font-semibold text-sm text-on-surface">失去焦点自动暂停</p>
+                  <p className="text-[11px] text-on-surface-variant">当播放器窗口失去焦点时，自动暂停视频播放</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pauseOnBlur}
+                    onChange={(e) => {
+                      setPauseOnBlur(e.target.checked);
+                      handleSaveSettings({ pauseOnBlur: e.target.checked });
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-[#E9E9EA] rounded-full peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-sm" />
+                </label>
               </div>
             </div>
           </section>

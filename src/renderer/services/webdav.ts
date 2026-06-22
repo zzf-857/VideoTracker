@@ -104,6 +104,10 @@ export class WebDAVClient {
       } else {
         targetPath = `${cleanBase}${cleanSub}`;
       }
+
+      try {
+        targetPath = decodeURIComponent(targetPath);
+      } catch {}
     }
 
     const encodedPath = targetPath
