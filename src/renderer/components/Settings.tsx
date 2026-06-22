@@ -92,7 +92,15 @@ interface SettingsProps {
         search: 'ctrl+f'
       },
       pauseOnBlur: true,
-      autoPlayNext: false
+      autoPlayNext: false,
+      dailyHours: 1.5,
+      dailyEpisodes: 3,
+      playbackSpeed: 1.25,
+      isSidebarCollapsed: false,
+      viewMode: 'tree',
+      sortBy: 'name',
+      sortOrder: 'asc',
+      expandedPaths: {}
     };
     setIdleTimeout(15);
     setAutoSync(false);

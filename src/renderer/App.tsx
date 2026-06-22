@@ -274,7 +274,7 @@ export default function App() {
     const handleMouseUp = () => {
       setSidebarWidth(w => {
         if (w < 150) {
-          setIsSidebarCollapsed(true);
+          handleSidebarCollapse(true);
           return 260; // 恢复默认，备下次展开
         }
         return w;
@@ -303,6 +303,8 @@ export default function App() {
       if (!active) return;
       setAppData(data);
       setSources(data.sources);
+      setPlaybackSpeed(data.settings.playbackSpeed ?? 1.25);
+      setIsSidebarCollapsed(data.settings.isSidebarCollapsed ?? false);
       
       console.log('[AutoRestore] Loaded appData. lastPlayedVideo:', data.lastPlayedVideo);
       
@@ -431,6 +433,20 @@ export default function App() {
         });
     }
   }, [currentSource]);
+
+  const handleSpeedChange = async (speed: number) => {
+    setPlaybackSpeed(speed);
+    const data = await storageService.loadData();
+    const updatedSettings = { ...data.settings, playbackSpeed: speed };
+    await storageService.saveData({ settings: updatedSettings });
+  };
+
+  const handleSidebarCollapse = async (collapsed: boolean) => {
+    setIsSidebarCollapsed(collapsed);
+    const data = await storageService.loadData();
+    const updatedSettings = { ...data.settings, isSidebarCollapsed: collapsed };
+    await storageService.saveData({ settings: updatedSettings });
+  };
 
   const handleRefresh = () => {
     setRefreshSignal(prev => prev + 1);
@@ -719,7 +735,7 @@ export default function App() {
           onSelectVideo={handleSelectVideo}
           progressMap={appData?.progress || {}}
           refreshSignal={refreshSignal}
-          onCollapse={() => setIsSidebarCollapsed(true)}
+          onCollapse={() => handleSidebarCollapse(true)}
           onRefresh={handleRefresh}
           
           sources={sources}
@@ -750,7 +766,7 @@ export default function App() {
           }}
         />
         <button
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          onClick={() => handleSidebarCollapse(!isSidebarCollapsed)}
           className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-12 rounded-full bg-white/95 backdrop-blur-md border border-black/10 flex items-center justify-center shadow-md text-on-surface-variant cursor-pointer z-50 transition-all duration-200 ${
             isSidebarCollapsed || leftHover || isResizing ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
           } hover:bg-primary hover:text-white hover:border-primary active:scale-90`}
@@ -778,7 +794,7 @@ export default function App() {
               playedLocalDuration={stats.finishedDuration}
               refreshSignal={refreshSignal}
               playbackSpeed={playbackSpeed}
-              onSpeedChange={setPlaybackSpeed}
+              onSpeedChange={handleSpeedChange}
             />
 
             {/* 主要播放与占位区域 */}
@@ -800,7 +816,7 @@ export default function App() {
                       videoPath={activeVideoPath}
                       videoName={activeVideoName}
                       playbackSpeed={playbackSpeed}
-                      onSpeedChange={setPlaybackSpeed}
+                      onSpeedChange={handleSpeedChange}
                       hotkeys={appData?.settings.hotkeys || {
                         fullscreen: 'f',
                         speedUp: 'c',

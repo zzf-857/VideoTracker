@@ -35,6 +35,8 @@ export default function Dashboard({
     storageService.loadData().then(data => {
       setPauseOnBlur(data.settings.pauseOnBlur ?? true);
       setAutoPlayNext(data.settings.autoPlayNext ?? false);
+      setDailyHours(data.settings.dailyHours ?? 1.5);
+      setDailyEpisodes(data.settings.dailyEpisodes ?? 3);
     });
   }, [refreshSignal]);
 
@@ -51,6 +53,18 @@ export default function Dashboard({
     const updatedSettings = { ...data.settings, autoPlayNext: checked };
     await storageService.saveData({ settings: updatedSettings });
     window.dispatchEvent(new CustomEvent('settings:updated'));
+  };
+
+  const handleSaveDailyHours = async (val: number) => {
+    const data = await storageService.loadData();
+    const updatedSettings = { ...data.settings, dailyHours: val };
+    await storageService.saveData({ settings: updatedSettings });
+  };
+
+  const handleSaveDailyEpisodes = async (val: number) => {
+    const data = await storageService.loadData();
+    const updatedSettings = { ...data.settings, dailyEpisodes: val };
+    await storageService.saveData({ settings: updatedSettings });
   };
   
   // 计算进度百分比
@@ -114,6 +128,7 @@ export default function Dashboard({
                   step="0.1"
                   value={dailyHours}
                   onChange={(e) => setDailyHours(Math.max(0.1, parseFloat(e.target.value) || 1.5))}
+                  onBlur={() => handleSaveDailyHours(dailyHours)}
                   className="w-14 p-1 text-xs border border-black/10 rounded-lg text-center font-bold focus:ring-1 focus:ring-primary focus:border-primary bg-white"
                 />
                 <span className="text-[11px] text-on-surface-variant">小时</span>
@@ -160,6 +175,7 @@ export default function Dashboard({
                   max="100"
                   value={dailyEpisodes}
                   onChange={(e) => setDailyEpisodes(Math.max(1, parseInt(e.target.value, 10) || 3))}
+                  onBlur={() => handleSaveDailyEpisodes(dailyEpisodes)}
                   className="w-14 p-1 text-xs border border-black/10 rounded-lg text-center font-bold focus:ring-1 focus:ring-primary focus:border-primary bg-white"
                 />
                 <span className="text-[11px] text-on-surface-variant">集</span>

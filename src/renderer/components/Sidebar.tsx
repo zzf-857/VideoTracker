@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { storageService, MediaSourceConfig, VideoProgress, AppHotkeys, getEventHotkeyString } from '../services/storage';
 import { WebDAVClient, WebDAVFile } from '../services/webdav';
 import CustomSelect from './CustomSelect';
@@ -61,14 +61,50 @@ export default function Sidebar({
     search: 'ctrl+f'
   });
 
-  // 加载快捷键配置
+  // 加载配置
   useEffect(() => {
     storageService.loadData().then(data => {
       if (data.settings.hotkeys) {
         setHotkeys(data.settings.hotkeys);
       }
+      setViewMode(data.settings.viewMode ?? 'tree');
+      setSortBy(data.settings.sortBy ?? 'name');
+      setSortOrder(data.settings.sortOrder ?? 'asc');
+      setExpandedPaths(data.settings.expandedPaths ?? {});
     });
   }, [refreshSignal]);
+
+  const saveSidebarSetting = async (updates: Partial<AppSettings>) => {
+    const data = await storageService.loadData();
+    const updatedSettings = { ...data.settings, ...updates };
+    await storageService.saveData({ settings: updatedSettings });
+  };
+
+  const handleToggleViewMode = () => {
+    const nextMode = viewMode === 'tree' ? 'flat' : 'tree';
+    setViewMode(nextMode);
+    saveSidebarSetting({ viewMode: nextMode });
+  };
+
+  const handleSortByChange = (val: string) => {
+    setSortBy(val as any);
+    saveSidebarSetting({ sortBy: val as any });
+  };
+
+  const handleToggleSortOrder = () => {
+    const nextOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortOrder(nextOrder);
+    saveSidebarSetting({ sortOrder: nextOrder });
+  };
+
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    saveSidebarSetting({ expandedPaths });
+  }, [expandedPaths]);
 
   // 全局监听搜索快捷键以聚焦输入框
   useEffect(() => {
@@ -756,7 +792,7 @@ export default function Sidebar({
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setViewMode(viewMode === 'tree' ? 'flat' : 'tree')}
+                  onClick={handleToggleViewMode}
                   className={`px-2 py-1 rounded-lg hover:bg-black/[0.04] flex items-center gap-1 text-[10px] font-extrabold transition-all cursor-pointer ${
                     viewMode === 'flat' ? 'text-primary bg-primary/5' : 'text-on-surface-variant'
                   }`}
@@ -784,7 +820,7 @@ export default function Sidebar({
                   )}
                   <CustomSelect
                     value={sortBy}
-                    onChange={(val) => setSortBy(val as any)}
+                    onChange={handleSortByChange}
                     options={[
                       { value: 'name', label: '文件名' },
                       { value: 'size', label: '大小' },
@@ -798,8 +834,8 @@ export default function Sidebar({
                   />
 
                   <button
-                    type="button"
-                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  type="button"
+                  onClick={handleToggleSortOrder}
                     className="p-0.5 rounded hover:bg-black/[0.04] flex items-center cursor-pointer"
                     title={sortOrder === 'asc' ? '升序 (点击切换降序)' : '降序 (点击切换升序)'}
                   >

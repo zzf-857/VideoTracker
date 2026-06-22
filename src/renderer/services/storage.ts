@@ -50,6 +50,14 @@ export interface AppSettings {
   hotkeys: AppHotkeys;
   pauseOnBlur?: boolean; // 失去焦点自动暂停播放，默认 true
   autoPlayNext?: boolean; // 是否开启自动连播，默认 false
+  dailyHours?: number; // 每日目标学习时长 (小时)
+  dailyEpisodes?: number; // 每日观看集数
+  playbackSpeed?: number; // 播放倍速
+  isSidebarCollapsed?: boolean; // 侧边栏折叠状态
+  viewMode?: 'tree' | 'flat'; // 大纲视图模式
+  sortBy?: 'name' | 'size' | 'ext' | 'mtime' | 'duration' | 'shuffle'; // 排序类型
+  sortOrder?: 'asc' | 'desc'; // 排序顺序
+  expandedPaths?: Record<string, boolean>; // 树节点展开路径集
 }
 
 // 统一数据接口
@@ -81,7 +89,15 @@ const DEFAULT_DATA: AppDataStore = {
       search: 'ctrl+f'
     },
     pauseOnBlur: true,
-    autoPlayNext: false
+    autoPlayNext: false,
+    dailyHours: 1.5,
+    dailyEpisodes: 3,
+    playbackSpeed: 1.25,
+    isSidebarCollapsed: false,
+    viewMode: 'tree',
+    sortBy: 'name',
+    sortOrder: 'asc',
+    expandedPaths: {}
   },
   timelines: {}
 };
@@ -126,7 +142,15 @@ class StorageService {
           search: this.cache?.settings?.hotkeys?.search ?? 'ctrl+f'
         },
         pauseOnBlur: this.cache?.settings?.pauseOnBlur ?? true,
-        autoPlayNext: this.cache?.settings?.autoPlayNext ?? false
+        autoPlayNext: this.cache?.settings?.autoPlayNext ?? false,
+        dailyHours: this.cache?.settings?.dailyHours ?? 1.5,
+        dailyEpisodes: this.cache?.settings?.dailyEpisodes ?? 3,
+        playbackSpeed: this.cache?.settings?.playbackSpeed ?? 1.25,
+        isSidebarCollapsed: this.cache?.settings?.isSidebarCollapsed ?? false,
+        viewMode: this.cache?.settings?.viewMode ?? 'tree',
+        sortBy: this.cache?.settings?.sortBy ?? 'name',
+        sortOrder: this.cache?.settings?.sortOrder ?? 'asc',
+        expandedPaths: this.cache?.settings?.expandedPaths ?? {}
       },
       timelines: this.cache?.timelines || {},
       lastPlayedVideo: this.cache?.lastPlayedVideo
