@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Player from './components/Player';
 import Dashboard from './components/Dashboard';
@@ -7,7 +7,7 @@ import SourceManager from './components/SourceManager';
 import Settings from './components/Settings';
 import Analytics from './components/Analytics';
 
-import { Chapter } from './components/ChapterSidebar';
+import ChapterSidebar, { Chapter } from './components/ChapterSidebar';
 import { useAppData, TreeNode } from './hooks/useAppData';
 import { storageService, MediaSourceConfig } from './services/storage';
 
