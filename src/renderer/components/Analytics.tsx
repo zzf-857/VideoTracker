@@ -588,9 +588,8 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
             </section>
           </div>
 
-          {/* 右侧列：历史时间轴 */}
-          <div className="col-span-12 lg:col-span-7 flex flex-col min-h-0">
-            <section className="apple-card flex flex-col rounded-2xl overflow-hidden bg-white/80 border border-black/5 shadow-sm transition-shadow hover:shadow-md h-[400px] lg:h-[466px]">
+          <div className="col-span-12 lg:col-span-7 flex flex-col h-[400px] lg:h-0 lg:min-h-full">
+            <section className="apple-card flex flex-col rounded-2xl flex-1 min-h-0 overflow-hidden bg-white/80 border border-black/5 shadow-sm transition-shadow hover:shadow-md">
               <div className="p-4 border-b border-black/5 flex justify-between items-center bg-black/[0.01]">
                 <h3 className="font-bold text-sm text-on-surface">学习历史时间轴</h3>
                 <div className="flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-bold shadow-xs">
