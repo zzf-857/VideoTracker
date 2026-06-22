@@ -377,6 +377,7 @@ export default function App() {
                       seekSignal={seekSignal}
                       sourceId={currentSource?.id}
                       nextVideoName={appData?.settings.autoPlayNext ? nextVideo?.name : undefined}
+                      pauseOnBlur={appData?.settings.pauseOnBlur}
                     />
                   );
                 })()

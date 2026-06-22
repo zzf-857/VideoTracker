@@ -21,6 +21,7 @@ interface PlayerProps {
   seekSignal?: { seconds: number; time: number } | null; // 新增：跳转信号
   sourceId?: string; // 新增：视频所属数据源 ID
   nextVideoName?: string; // 新增：下一个视频的名字 (用于连播提示)
+  pauseOnBlur?: boolean; // 新增：失去焦点自动暂停
 }
 
 export default function Player({
@@ -36,7 +37,8 @@ export default function Player({
   activeChapters = [],
   seekSignal,
   sourceId = '',
-  nextVideoName
+  nextVideoName,
+  pauseOnBlur = true
 }: PlayerProps) {
   const artRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<Artplayer | null>(null);
@@ -481,30 +483,24 @@ export default function Player({
 
     // 失去/重新获得焦点自动暂停与恢复
     const handleWindowBlur = () => {
-      storageService.loadData().then(data => {
-        const pauseOnBlur = data.settings.pauseOnBlur ?? true;
-        if (!pauseOnBlur) return;
+      if (!pauseOnBlur) return;
 
-        if (art && art.playing) {
-          wasPlayingBeforeBlur.current = true;
-          art.pause();
-          saveProgressForce(); // 失去焦点暂停并强制保存
-        } else {
-          wasPlayingBeforeBlur.current = false;
-        }
-      });
+      if (art && art.playing) {
+        wasPlayingBeforeBlur.current = true;
+        art.pause();
+        saveProgressForce(); // 失去焦点暂停并强制保存
+      } else {
+        wasPlayingBeforeBlur.current = false;
+      }
     };
 
     const handleWindowFocus = () => {
-      storageService.loadData().then(data => {
-        const pauseOnBlur = data.settings.pauseOnBlur ?? true;
-        if (!pauseOnBlur) return;
+      if (!pauseOnBlur) return;
 
-        if (wasPlayingBeforeBlur.current && art) {
-          art.play().catch(err => console.warn('Auto-resume failed on window focus:', err));
-          wasPlayingBeforeBlur.current = false;
-        }
-      });
+      if (wasPlayingBeforeBlur.current && art) {
+        art.play().catch(err => console.warn('Auto-resume failed on window focus:', err));
+        wasPlayingBeforeBlur.current = false;
+      }
     };
 
     // 监听窗口关闭/刷新事件，防止数据丢失
