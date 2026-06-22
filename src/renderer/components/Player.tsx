@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import Artplayer from 'artplayer';
-import { storageService, VideoProgress } from '../services/storage';
+import { storageService, VideoProgress, getEventHotkeyString } from '../services/storage';
 
 interface PlayerProps {
   videoUrl: string; // 播放直链 (可以是本地 HTTP 转接 Url，或 WebDAV 直链)
@@ -571,55 +571,54 @@ export default function Player({
         return;
       }
 
-      let key = e.key.toLowerCase();
-      if (e.key === ' ') {
-        key = 'space';
-      }
+      const pressedHotkey = getEventHotkeyString(e);
+      if (!pressedHotkey) return;
+
       const fullscreenKey = (hotkeys?.fullscreen || 'f').toLowerCase();
       const speedUpKey = (hotkeys?.speedUp || 'c').toLowerCase();
       const speedDownKey = (hotkeys?.speedDown || 'x').toLowerCase();
       const speedResetKey = (hotkeys?.speedReset || 'z').toLowerCase();
 
-      if (key === fullscreenKey) {
+      if (pressedHotkey === fullscreenKey) {
         e.preventDefault();
         art.fullscreen = !art.fullscreen;
-      } else if (key === speedUpKey) {
+      } else if (pressedHotkey === speedUpKey) {
         e.preventDefault();
         const nextSpeed = Math.min(4.0, Math.round((playbackSpeed + 0.1) * 100) / 100);
         onSpeedChange(nextSpeed);
         art.notice.show = `倍速: ${nextSpeed}x`;
-      } else if (key === speedDownKey) {
+      } else if (pressedHotkey === speedDownKey) {
         e.preventDefault();
         const nextSpeed = Math.max(0.1, Math.round((playbackSpeed - 0.1) * 100) / 100);
         onSpeedChange(nextSpeed);
         art.notice.show = `倍速: ${nextSpeed}x`;
-      } else if (key === speedResetKey) {
+      } else if (pressedHotkey === speedResetKey) {
         e.preventDefault();
         onSpeedChange(1.0);
         art.notice.show = `倍速: 1.0x`;
-      } else if (key === 'space') {
+      } else if (pressedHotkey === 'space') {
         e.preventDefault();
         if (art.playing) {
           art.pause();
         } else {
           art.play();
         }
-      } else if (key === 'arrowleft') {
+      } else if (pressedHotkey === 'arrowleft') {
         e.preventDefault();
         const targetTime = Math.max(0, art.currentTime - 5);
         art.currentTime = targetTime;
         art.notice.show = `快退: -5s`;
-      } else if (key === 'arrowright') {
+      } else if (pressedHotkey === 'arrowright') {
         e.preventDefault();
         const targetTime = Math.min(art.duration, art.currentTime + 5);
         art.currentTime = targetTime;
         art.notice.show = `快进: +5s`;
-      } else if (key === 'arrowup') {
+      } else if (pressedHotkey === 'arrowup') {
         e.preventDefault();
         const targetVol = Math.min(1, art.volume + 0.1);
         art.volume = targetVol;
         art.notice.show = `音量: ${Math.round(targetVol * 100)}%`;
-      } else if (key === 'arrowdown') {
+      } else if (pressedHotkey === 'arrowdown') {
         e.preventDefault();
         const targetVol = Math.max(0, art.volume - 0.1);
         art.volume = targetVol;

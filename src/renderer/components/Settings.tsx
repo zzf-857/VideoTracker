@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { storageService, AppSettings } from '../services/storage';
+import { storageService, AppSettings, formatHotkeyForDisplay } from '../services/storage';
 import { syncService } from '../services/sync';
 
 interface SettingsProps {
@@ -13,7 +13,8 @@ interface SettingsProps {
       fullscreen: 'f',
       speedUp: 'c',
       speedDown: 'x',
-      speedReset: 'z'
+      speedReset: 'z',
+      search: 'ctrl+f'
     },
     pauseOnBlur: true
   });
@@ -85,7 +86,8 @@ interface SettingsProps {
         fullscreen: 'f',
         speedUp: 'c',
         speedDown: 'x',
-        speedReset: 'z'
+        speedReset: 'z',
+        search: 'ctrl+f'
       },
       pauseOnBlur: true
     };
@@ -214,9 +216,17 @@ interface SettingsProps {
         return;
       }
 
+      // 组装修饰键组合
+      const parts: string[] = [];
+      if (e.ctrlKey) parts.push('ctrl');
+      if (e.altKey) parts.push('alt');
+      if (e.shiftKey) parts.push('shift');
+      parts.push(key);
+      const hotkeyStr = parts.join('+');
+
       const updatedHotkeys = {
         ...settings.hotkeys,
-        [activeHotkeyKey]: key
+        [activeHotkeyKey]: hotkeyStr
       };
 
       handleSaveSettings({ hotkeys: updatedHotkeys });
@@ -542,7 +552,7 @@ interface SettingsProps {
                   }`}
                   title="点击重新录制绑定按键"
                 >
-                  {activeHotkeyKey === 'fullscreen' ? '录制中... (Esc取消)' : (settings.hotkeys?.fullscreen || 'f').toUpperCase()}
+                  {activeHotkeyKey === 'fullscreen' ? '录制中... (Esc取消)' : formatHotkeyForDisplay(settings.hotkeys?.fullscreen || 'f')}
                 </button>
               </div>
 
@@ -561,7 +571,7 @@ interface SettingsProps {
                   }`}
                   title="点击重新录制绑定按键"
                 >
-                  {activeHotkeyKey === 'speedUp' ? '录制中... (Esc取消)' : (settings.hotkeys?.speedUp || 'c').toUpperCase()}
+                  {activeHotkeyKey === 'speedUp' ? '录制中... (Esc取消)' : formatHotkeyForDisplay(settings.hotkeys?.speedUp || 'c')}
                 </button>
               </div>
 
@@ -580,7 +590,7 @@ interface SettingsProps {
                   }`}
                   title="点击重新录制绑定按键"
                 >
-                  {activeHotkeyKey === 'speedDown' ? '录制中... (Esc取消)' : (settings.hotkeys?.speedDown || 'x').toUpperCase()}
+                  {activeHotkeyKey === 'speedDown' ? '录制中... (Esc取消)' : formatHotkeyForDisplay(settings.hotkeys?.speedDown || 'x')}
                 </button>
               </div>
 
@@ -599,7 +609,26 @@ interface SettingsProps {
                   }`}
                   title="点击重新录制绑定按键"
                 >
-                  {activeHotkeyKey === 'speedReset' ? '录制中... (Esc取消)' : (settings.hotkeys?.speedReset || 'z').toUpperCase()}
+                  {activeHotkeyKey === 'speedReset' ? '录制中... (Esc取消)' : formatHotkeyForDisplay(settings.hotkeys?.speedReset || 'z')}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-black/[0.01] border border-black/5 rounded-xl">
+                <div>
+                  <p className="text-xs font-semibold text-on-surface">大纲搜索框聚焦</p>
+                  <p className="text-[10px] text-on-surface-variant">快速将光标移入侧边栏视频搜索框</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveHotkeyKey('search')}
+                  className={`min-w-20 h-8 px-3 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer select-none transition-all shadow-sm ${
+                    activeHotkeyKey === 'search'
+                      ? 'bg-primary text-white scale-95 border-primary shadow-inner animate-pulse'
+                      : 'bg-white border border-black/10 text-primary hover:border-primary/40 hover:bg-black/[0.01] active:scale-95'
+                  }`}
+                  title="点击重新录制绑定按键"
+                >
+                  {activeHotkeyKey === 'search' ? '录制中... (Esc取消)' : formatHotkeyForDisplay(settings.hotkeys?.search || 'ctrl+f')}
                 </button>
               </div>
             </div>

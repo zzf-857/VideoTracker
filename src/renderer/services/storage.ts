@@ -38,6 +38,7 @@ export interface AppHotkeys {
   speedUp: string;    // 默认 'c'
   speedDown: string;  // 默认 'x'
   speedReset: string; // 默认 'z'
+  search?: string;     // 默认 'ctrl+f'
 }
 
 export interface AppSettings {
@@ -75,7 +76,8 @@ const DEFAULT_DATA: AppDataStore = {
       fullscreen: 'f',
       speedUp: 'c',
       speedDown: 'x',
-      speedReset: 'z'
+      speedReset: 'z',
+      search: 'ctrl+f'
     },
     pauseOnBlur: true
   },
@@ -114,11 +116,12 @@ class StorageService {
         webdavSyncUrl: this.cache?.settings?.webdavSyncUrl,
         webdavUser: this.cache?.settings?.webdavUser,
         webdavPassword: this.cache?.settings?.webdavPassword,
-        hotkeys: this.cache?.settings?.hotkeys || {
-          fullscreen: 'f',
-          speedUp: 'c',
-          speedDown: 'x',
-          speedReset: 'z'
+        hotkeys: {
+          fullscreen: this.cache?.settings?.hotkeys?.fullscreen ?? 'f',
+          speedUp: this.cache?.settings?.hotkeys?.speedUp ?? 'c',
+          speedDown: this.cache?.settings?.hotkeys?.speedDown ?? 'x',
+          speedReset: this.cache?.settings?.hotkeys?.speedReset ?? 'z',
+          search: this.cache?.settings?.hotkeys?.search ?? 'ctrl+f'
         },
         pauseOnBlur: this.cache?.settings?.pauseOnBlur ?? true
       },
@@ -241,3 +244,36 @@ class StorageService {
 }
 
 export const storageService = new StorageService();
+
+export function getEventHotkeyString(e: KeyboardEvent): string {
+  const parts: string[] = [];
+  if (e.ctrlKey) parts.push('ctrl');
+  if (e.altKey) parts.push('alt');
+  if (e.shiftKey) parts.push('shift');
+  
+  let key = e.key.toLowerCase();
+  if (e.key === ' ') {
+    key = 'space';
+  }
+  
+  if (['control', 'shift', 'alt', 'meta'].includes(key)) {
+    return '';
+  }
+  
+  parts.push(key);
+  return parts.join('+');
+}
+
+export function formatHotkeyForDisplay(hotkeyStr: string): string {
+  if (!hotkeyStr) return '无';
+  return hotkeyStr
+    .split('+')
+    .map(part => {
+      if (part === 'ctrl') return 'Ctrl';
+      if (part === 'alt') return 'Alt';
+      if (part === 'shift') return 'Shift';
+      if (part === 'space') return 'Space';
+      return part.toUpperCase();
+    })
+    .join(' + ');
+}

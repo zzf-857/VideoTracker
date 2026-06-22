@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { storageService, MediaSourceConfig, VideoProgress } from '../services/storage';
+import { storageService, MediaSourceConfig, VideoProgress, AppHotkeys, getEventHotkeyString } from '../services/storage';
 import { WebDAVClient, WebDAVFile } from '../services/webdav';
 import CustomSelect from './CustomSelect';
 
@@ -49,6 +49,54 @@ export default function Sidebar({
   isLoading
 }: SidebarProps) {
   const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [highlightedVideoPath, setHighlightedVideoPath] = useState<string | null>(null);
+  const [hotkeys, setHotkeys] = useState<AppHotkeys>({
+    fullscreen: 'f',
+    speedUp: 'c',
+    speedDown: 'x',
+    speedReset: 'z',
+    search: 'ctrl+f'
+  });
+
+  // 加载快捷键配置
+  useEffect(() => {
+    storageService.loadData().then(data => {
+      if (data.settings.hotkeys) {
+        setHotkeys(data.settings.hotkeys);
+      }
+    });
+  }, [refreshSignal]);
+
+  // 全局监听搜索快捷键以聚焦输入框
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (
+        activeEl.tagName === 'INPUT' || 
+        activeEl.tagName === 'TEXTAREA' || 
+        activeEl.tagName === 'SELECT'
+      )) {
+        return;
+      }
+
+      const searchKey = (hotkeys.search || 'ctrl+f').toLowerCase();
+      const pressedHotkey = getEventHotkeyString(e);
+      
+      if (pressedHotkey === searchKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        const searchInput = document.getElementById('sidebar-search-input');
+        if (searchInput) {
+          searchInput.focus();
+          (searchInput as HTMLInputElement).select();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [hotkeys]);
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
     x: number;
@@ -280,6 +328,72 @@ export default function Sidebar({
 
   const sortedFlatVideos = getSortedFlatVideos();
 
+
+
+  // 定位到当前播放视频位置并执行微缩放动画
+  const handleLocateActiveVideo = () => {
+    if (!activeVideoPath) return;
+
+    // 1. 自动寻找并展开所有祖先目录
+    const parentPaths = findParentPaths(fileTree, activeVideoPath);
+    if (parentPaths && parentPaths.length > 0) {
+      setExpandedPaths(prev => {
+        const next = { ...prev };
+        for (const p of parentPaths) {
+          next[p] = true;
+        }
+        return next;
+      });
+    }
+
+    // 2. 自动滚动到选中的节点并触发微缩放
+    setTimeout(() => {
+      const activeEl = document.querySelector('[data-active-video="true"]');
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        
+        // 触发高亮动画
+        setHighlightedVideoPath(activeVideoPath);
+        setTimeout(() => {
+          setHighlightedVideoPath(null);
+        }, 1600);
+      }
+    }, 200);
+  };
+
+  // 树状展示的过滤匹配算法 (包含父节点级联关系)
+  const getFilteredTree = (nodes: TreeNode[], query: string): { nodes: TreeNode[]; hasMatch: boolean } => {
+    if (!query.trim()) {
+      return { nodes, hasMatch: false };
+    }
+
+    const cleanQuery = query.toLowerCase();
+    const result: TreeNode[] = [];
+    let anyMatch = false;
+
+    for (const node of nodes) {
+      if (node.isDir) {
+        const subResult = getFilteredTree(node.children || [], query);
+        const nameMatches = node.name.toLowerCase().includes(cleanQuery);
+        
+        if (subResult.hasMatch || nameMatches) {
+          result.push({
+            ...node,
+            children: subResult.nodes
+          });
+          anyMatch = true;
+        }
+      } else {
+        if (node.name.toLowerCase().includes(cleanQuery)) {
+          result.push(node);
+          anyMatch = true;
+        }
+      }
+    }
+
+    return { nodes: result, hasMatch: anyMatch };
+  };
+
   // 3. 树节点展开与折叠控制
   const handleToggleExpand = async (node: TreeNode) => {
     const isExpanded = expandedPaths[node.path];
@@ -384,7 +498,7 @@ export default function Sidebar({
   // 递归渲染树形组件
   const renderTreeNodes = (nodes: TreeNode[], depth = 0) => {
     return nodes.map(node => {
-      const isExpanded = expandedPaths[node.path];
+      const isExpanded = searchQuery.trim() ? true : expandedPaths[node.path];
       const isSelected = activeVideoPath === node.path;
 
       if (node.isDir) {
@@ -439,7 +553,7 @@ export default function Sidebar({
             }}
             className={`relative flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
               isSelected ? 'bg-primary/10 text-primary font-semibold' : 'text-on-surface hover:bg-black/[0.03]'
-            }`}
+            } ${node.path === highlightedVideoPath ? 'animate-locate-highlight' : ''}`}
           >
             {showProgressBg && (
               <div 
@@ -549,6 +663,45 @@ export default function Sidebar({
         {/* 仅在仪表盘模式下展示侧边栏大纲目录 */}
         {currentTab === 'dashboard' && (
           <div className="flex-1 flex flex-col overflow-hidden border-t border-black/5 mt-2">
+            {/* 搜索与定位控制栏 */}
+            <div className="px-4 py-2 flex items-center gap-2 border-b border-black/5 bg-black/[0.01]">
+              {/* 定位按钮 */}
+              <button
+                onClick={handleLocateActiveVideo}
+                disabled={!activeVideoPath}
+                className={`p-1.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                  activeVideoPath
+                    ? 'bg-white border-black/10 text-primary hover:border-primary/40 hover:bg-black/[0.01] active:scale-95 shadow-sm'
+                    : 'bg-black/[0.02] border-black/5 text-on-surface-variant/20 cursor-not-allowed'
+                }`}
+                title={activeVideoPath ? "定位到当前播放视频" : "当前未播放任何视频"}
+              >
+                <span className="material-symbols-outlined text-[16px]">my_location</span>
+              </button>
+
+              <div className="relative flex-1">
+                <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-on-surface-variant/40">
+                  search
+                </span>
+                <input
+                  id="sidebar-search-input"
+                  type="text"
+                  placeholder="搜索视频..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white border border-black/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary placeholder-on-surface-variant/40"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-variant/40 hover:text-on-surface cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* 数据源选择器 */}
             <div className="px-4 py-3 flex items-center justify-between bg-black/[0.01] border-b border-black/5 relative z-30">
               <CustomSelect
@@ -633,41 +786,46 @@ export default function Sidebar({
               ) : fileTree.length > 0 ? (
                 viewMode === 'tree' ? (
                   // 树状展示
-                  <div className="space-y-1">{renderTreeNodes(fileTree)}</div>
+                  <div className="space-y-1">{renderTreeNodes(getFilteredTree(fileTree, searchQuery).nodes)}</div>
                 ) : (
                   // PotPlayer 风格：平铺展示 (剔除文件夹)
                   <div className="space-y-1">
-                    {sortedFlatVideos.map(video => {
-                      const isSelected = activeVideoPath === video.path;
-                      const percent = getProgressPercent(video.path);
-                      const prog = progressMap[video.path];
-                      const showProgressBg = percent > 0 && !prog?.isFinished;
-                      const durStr = prog?.duration ? ` · ${formatDuration(prog.duration)}` : '';
-                      const metaStr = `${formatSize(video.size)}${durStr}`;
+                    {(() => {
+                      const filteredFlatVideos = searchQuery.trim()
+                        ? sortedFlatVideos.filter(v => v.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                        : sortedFlatVideos;
 
-                      const isFinished = prog?.isFinished || false;
-                      return (
-                        <div
-                          key={video.path}
-                          data-active-video={isSelected ? "true" : "false"}
-                          onClick={() => handlePlayVideo(video)}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setContextMenu({
-                              visible: true,
-                              x: e.clientX,
-                              y: e.clientY,
-                              videoPath: video.path,
-                              videoName: video.name,
-                              isFinished,
-                              duration: prog?.duration
-                            });
-                          }}
-                          className={`relative flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
-                            isSelected ? 'bg-primary/10 text-primary font-semibold' : 'text-on-surface hover:bg-black/[0.03]'
-                          }`}
-                        >
+                      return filteredFlatVideos.map(video => {
+                        const isSelected = activeVideoPath === video.path;
+                        const percent = getProgressPercent(video.path);
+                        const prog = progressMap[video.path];
+                        const showProgressBg = percent > 0 && !prog?.isFinished;
+                        const durStr = prog?.duration ? ` · ${formatDuration(prog.duration)}` : '';
+                        const metaStr = `${formatSize(video.size)}${durStr}`;
+
+                        const isFinished = prog?.isFinished || false;
+                        return (
+                          <div
+                            key={video.path}
+                            data-active-video={isSelected ? "true" : "false"}
+                            onClick={() => handlePlayVideo(video)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setContextMenu({
+                                visible: true,
+                                x: e.clientX,
+                                y: e.clientY,
+                                videoPath: video.path,
+                                videoName: video.name,
+                                isFinished,
+                                duration: prog?.duration
+                              });
+                            }}
+                            className={`relative flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-colors select-none ${
+                              isSelected ? 'bg-primary/10 text-primary font-semibold' : 'text-on-surface hover:bg-black/[0.03]'
+                            } ${video.path === highlightedVideoPath ? 'animate-locate-highlight' : ''}`}
+                          >
                           {showProgressBg && (
                             <div 
                               className="absolute left-0 top-0 bottom-0 bg-primary/8 pointer-events-none z-0 rounded-l-lg"
@@ -699,10 +857,10 @@ export default function Sidebar({
                           </div>
                         </div>
                       );
-                    })}
-                  </div>
-                )
-              ) : (
+                    });
+                  })()}
+                </div>
+              )) : (
                 <div className="flex flex-col items-center justify-center h-40 text-center px-4">
                   <span className="material-symbols-outlined text-3xl text-on-surface-variant/40 mb-2">folder_off</span>
                   <span className="text-xs text-on-surface-variant">

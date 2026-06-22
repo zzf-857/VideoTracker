@@ -169,3 +169,22 @@ body {
   border-radius: 1px;
 }
 
+/* 视频定位高亮微缩放动画 */
+@keyframes locate-highlight {
+  0%, 100% {
+    transform: scale(1);
+  }
+  25%, 75% {
+    transform: scale(1.04);
+    box-shadow: 0 4px 12px rgba(0, 113, 227, 0.15);
+  }
+  50% {
+    transform: scale(0.97);
+  }
+}
+
+.animate-locate-highlight {
+  animation: locate-highlight 0.8s ease-in-out 2;
+  z-index: 10;
+}
+
