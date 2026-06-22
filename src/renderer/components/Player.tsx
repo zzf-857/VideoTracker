@@ -20,6 +20,7 @@ interface PlayerProps {
   activeChapters?: any[]; // 新增：当前章节列表
   seekSignal?: { seconds: number; time: number } | null; // 新增：跳转信号
   sourceId?: string; // 新增：视频所属数据源 ID
+  nextVideoName?: string; // 新增：下一个视频的名字 (用于连播提示)
 }
 
 export default function Player({
@@ -34,7 +35,8 @@ export default function Player({
   onEnded,
   activeChapters = [],
   seekSignal,
-  sourceId = ''
+  sourceId = '',
+  nextVideoName
 }: PlayerProps) {
   const artRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<Artplayer | null>(null);
@@ -152,6 +154,7 @@ export default function Player({
     let nextSeekTime: number | null = null;
     let currentHoverKey: number | null = null;
     let debounceTimer: NodeJS.Timeout | null = null;
+    let hasShownNextNotice = false; // 控制单次播放提示一次
 
     const updatePreviewImage = (imgUrl: string) => {
       const thumbContainer = tipEl.querySelector('.custom-tip-thumb-box') as HTMLElement;
@@ -361,6 +364,7 @@ export default function Player({
     // 监听事件
     art.on('ready', () => {
       console.log('ArtPlayer is ready');
+      hasShownNextNotice = false;
       storageService.loadData().then(data => {
         const record = data.progress[videoPath];
         isInitiallyFinishedRef.current = record?.isFinished || false;
@@ -437,6 +441,12 @@ export default function Player({
         durationRef.current = duration;
         
         if (onTimeUpdate) onTimeUpdate(currentTime, duration);
+
+        // 如果开启了自动连播，且离结束还剩 5 秒以内，提示用户
+        if (nextVideoName && duration - currentTime <= 5 && !hasShownNextNotice) {
+          hasShownNextNotice = true;
+          art.notice.show = `准备自动连播下一个视频：【${nextVideoName}】`;
+        }
 
         // 节流写入：正常播放时每 2 秒保存一次，避免频繁 I/O
         const now = Date.now();
@@ -548,7 +558,7 @@ export default function Player({
       }
       playerInstanceRef.current = null;
     };
-  }, [videoUrl, videoPath, activeChapters, sourceId]);
+  }, [videoUrl, videoPath, activeChapters, sourceId, nextVideoName]);
 
   // 2. 同步外部倍速状态变化到播放器
   useEffect(() => {
@@ -643,18 +653,24 @@ export default function Player({
     };
   }, [playbackSpeed, hotkeys, onSpeedChange]);
 
-  // 4. 当外部改变播放器状态（例如触发挂机闲置暂停时）
+  // 4. 当外部改变播放器状态（例如触发挂机闲置暂停时，或延迟连播自动唤醒时）
   useEffect(() => {
     const handlePauseSignal = () => {
       if (playerInstanceRef.current && playerInstanceRef.current.playing) {
         playerInstanceRef.current.pause();
       }
     };
+    const handlePlaySignal = () => {
+      if (playerInstanceRef.current && !playerInstanceRef.current.playing) {
+        playerInstanceRef.current.play().catch(err => console.warn('Play signal failed:', err));
+      }
+    };
     
-    window.dispatchEvent(new CustomEvent('player:pause-signal'));
     window.addEventListener('player:pause-signal', handlePauseSignal);
+    window.addEventListener('player:play-signal', handlePlaySignal);
     return () => {
       window.removeEventListener('player:pause-signal', handlePauseSignal);
+      window.removeEventListener('player:play-signal', handlePlaySignal);
     };
   }, []);
 

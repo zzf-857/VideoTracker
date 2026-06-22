@@ -454,8 +454,13 @@ export default function App() {
               setActiveVideoUrl(streamUrl);
               setActiveVideoPath(nextVideo.path);
               setActiveVideoName(nextVideo.name);
-              setIsPlaying(true);
-              console.log(`[AutoPlayNext] Autoplaying next video: ${nextVideo.name}`);
+              setIsPlaying(false); // 刚连播过去时，状态保持为暂停（以展示前 2 秒的静止画面）
+              console.log(`[AutoPlayNext] Loaded next video, pausing for 2s: ${nextVideo.name}`);
+              
+              // 2秒钟后自动触发播放
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('player:play-signal'));
+              }, 2000);
             }
           } catch (err) {
             console.error('Autoplay next video failed:', err);
@@ -779,25 +784,39 @@ export default function App() {
             {/* 主要播放与占位区域 */}
             <div className="flex-1 min-h-[300px] relative bg-black rounded-2xl overflow-hidden shadow-lg border border-black/5">
               {activeVideoUrl ? (
-                <Player
-                  videoUrl={activeVideoUrl}
-                  videoPath={activeVideoPath}
-                  videoName={activeVideoName}
-                  playbackSpeed={playbackSpeed}
-                  onSpeedChange={setPlaybackSpeed}
-                  hotkeys={appData?.settings.hotkeys || {
-                    fullscreen: 'f',
-                    speedUp: 'c',
-                    speedDown: 'x',
-                    speedReset: 'z'
-                  }}
-                  onPlayStateChange={handlePlayStateChange}
-                  onTimeUpdate={handleTimeUpdate}
-                  onEnded={handleVideoEnded}
-                  activeChapters={activeChapters}
-                  seekSignal={seekSignal}
-                  sourceId={currentSource?.id}
-                />
+                (() => {
+                  const nextVideo = (() => {
+                    if (!playQueue || playQueue.length === 0 || !activeVideoPath) return null;
+                    const idx = playQueue.findIndex(item => item.path === activeVideoPath);
+                    if (idx !== -1 && idx < playQueue.length - 1) {
+                      return playQueue[idx + 1];
+                    }
+                    return null;
+                  })();
+
+                  return (
+                    <Player
+                      videoUrl={activeVideoUrl}
+                      videoPath={activeVideoPath}
+                      videoName={activeVideoName}
+                      playbackSpeed={playbackSpeed}
+                      onSpeedChange={setPlaybackSpeed}
+                      hotkeys={appData?.settings.hotkeys || {
+                        fullscreen: 'f',
+                        speedUp: 'c',
+                        speedDown: 'x',
+                        speedReset: 'z'
+                      }}
+                      onPlayStateChange={handlePlayStateChange}
+                      onTimeUpdate={handleTimeUpdate}
+                      onEnded={handleVideoEnded}
+                      activeChapters={activeChapters}
+                      seekSignal={seekSignal}
+                      sourceId={currentSource?.id}
+                      nextVideoName={appData?.settings.autoPlayNext ? nextVideo?.name : undefined}
+                    />
+                  );
+                })()
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-[#1e1b4b]/20 to-[#0b0b0f]/10">
                   <span className="material-symbols-outlined text-5xl text-primary/40 mb-3 animate-bounce">play_circle</span>
