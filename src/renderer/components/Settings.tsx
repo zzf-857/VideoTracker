@@ -29,6 +29,7 @@ interface SettingsProps {
   const [idleTimeout, setIdleTimeout] = useState(15);
   const [autoSync, setAutoSync] = useState(false);
   const [pauseOnBlur, setPauseOnBlur] = useState(true);
+  const [autoPlayNext, setAutoPlayNext] = useState(false);
 
   // 当前正在录制的快捷键字段名
   const [activeHotkeyKey, setActiveHotkeyKey] = useState<string | null>(null);
@@ -46,6 +47,7 @@ interface SettingsProps {
       setIdleTimeout(data.settings.idleTimeout || 15);
       setAutoSync(data.settings.autoSync || false);
       setPauseOnBlur(data.settings.pauseOnBlur ?? true);
+      setAutoPlayNext(data.settings.autoPlayNext ?? false);
       setWebdavUrl(data.settings.webdavSyncUrl || '');
       setWebdavUser(data.settings.webdavUser || '');
       setWebdavPassword(data.settings.webdavPassword || '');
@@ -89,11 +91,13 @@ interface SettingsProps {
         speedReset: 'z',
         search: 'ctrl+f'
       },
-      pauseOnBlur: true
+      pauseOnBlur: true,
+      autoPlayNext: false
     };
     setIdleTimeout(15);
     setAutoSync(false);
     setPauseOnBlur(true);
+    setAutoPlayNext(false);
     setWebdavUrl('');
     setWebdavUser('');
     setWebdavPassword('');
@@ -246,6 +250,7 @@ interface SettingsProps {
       idleTimeout,
       autoSync,
       pauseOnBlur,
+      autoPlayNext,
       webdavSyncUrl: webdavUrl,
       webdavUser,
       webdavPassword,
@@ -422,6 +427,25 @@ interface SettingsProps {
                     onChange={(e) => {
                       setPauseOnBlur(e.target.checked);
                       handleSaveSettings({ pauseOnBlur: e.target.checked });
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-[#E9E9EA] rounded-full peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-sm" />
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-black/5">
+                <div>
+                  <p className="font-semibold text-sm text-on-surface">自动连播</p>
+                  <p className="text-[11px] text-on-surface-variant">自动播放列表中的下一个视频，完美适配树状与平铺列表</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoPlayNext}
+                    onChange={(e) => {
+                      setAutoPlayNext(e.target.checked);
+                      handleSaveSettings({ autoPlayNext: e.target.checked });
                     }}
                     className="sr-only peer"
                   />

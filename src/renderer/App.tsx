@@ -99,6 +99,7 @@ export default function App() {
   const [sources, setSources] = useState<MediaSourceConfig[]>([]);
   const [fileTree, setFileTree] = useState<TreeNode[]>([]);
   const [isLoadingFileTree, setIsLoadingFileTree] = useState<boolean>(false);
+  const [playQueue, setPlayQueue] = useState<{ path: string; name: string }[]>([]);
 
   const startResizing = (mouseDownEvent: React.MouseEvent) => {
     mouseDownEvent.preventDefault();
@@ -435,6 +436,35 @@ export default function App() {
     setRefreshSignal(prev => prev + 1);
   };
 
+  // 视频播放结束时的自动连播逻辑
+  const handleVideoEnded = async () => {
+    handleRefresh(); // 更新已看标记和进度日历
+
+    const data = await storageService.loadData();
+    if (data.settings.autoPlayNext && playQueue.length > 0 && currentSource) {
+      const currentIdx = playQueue.findIndex(item => item.path === activeVideoPath);
+      if (currentIdx !== -1 && currentIdx < playQueue.length - 1) {
+        const nextVideo = playQueue[currentIdx + 1];
+        
+        // 延时 500ms，为渲染已学完状态更新提供安全缓冲
+        setTimeout(async () => {
+          try {
+            const streamUrl = await getVideoStreamUrlByPath(nextVideo.path, currentSource);
+            if (streamUrl) {
+              setActiveVideoUrl(streamUrl);
+              setActiveVideoPath(nextVideo.path);
+              setActiveVideoName(nextVideo.name);
+              setIsPlaying(true);
+              console.log(`[AutoPlayNext] Autoplaying next video: ${nextVideo.name}`);
+            }
+          } catch (err) {
+            console.error('Autoplay next video failed:', err);
+          }
+        }, 500);
+      }
+    }
+  };
+
   // 切换选项卡时，若切出播放大屏，强制停止计时
   useEffect(() => {
     if (currentTab !== 'dashboard') {
@@ -693,6 +723,7 @@ export default function App() {
           fileTree={fileTree}
           setFileTree={setFileTree}
           isLoading={isLoadingFileTree}
+          onPlayQueueChange={setPlayQueue}
         />
       </div>
 
@@ -762,7 +793,7 @@ export default function App() {
                   }}
                   onPlayStateChange={handlePlayStateChange}
                   onTimeUpdate={handleTimeUpdate}
-                  onEnded={handleRefresh}
+                  onEnded={handleVideoEnded}
                   activeChapters={activeChapters}
                   seekSignal={seekSignal}
                   sourceId={currentSource?.id}

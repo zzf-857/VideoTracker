@@ -29,10 +29,12 @@ export default function Dashboard({
   const setSpeed = onSpeedChange;
   const [statViewMode, setStatViewMode] = useState<'count' | 'duration'>('count'); // 统计文字模式
   const [pauseOnBlur, setPauseOnBlur] = useState<boolean>(true);
+  const [autoPlayNext, setAutoPlayNext] = useState<boolean>(false);
 
   useEffect(() => {
     storageService.loadData().then(data => {
       setPauseOnBlur(data.settings.pauseOnBlur ?? true);
+      setAutoPlayNext(data.settings.autoPlayNext ?? false);
     });
   }, [refreshSignal]);
 
@@ -41,6 +43,14 @@ export default function Dashboard({
     const data = await storageService.loadData();
     const updatedSettings = { ...data.settings, pauseOnBlur: checked };
     await storageService.saveData({ settings: updatedSettings });
+  };
+
+  const handleToggleAutoPlayNext = async (checked: boolean) => {
+    setAutoPlayNext(checked);
+    const data = await storageService.loadData();
+    const updatedSettings = { ...data.settings, autoPlayNext: checked };
+    await storageService.saveData({ settings: updatedSettings });
+    window.dispatchEvent(new CustomEvent('settings:updated'));
   };
   
   // 计算进度百分比
@@ -170,6 +180,22 @@ export default function Dashboard({
                 type="checkbox"
                 checked={pauseOnBlur}
                 onChange={(e) => handleTogglePauseOnBlur(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-[#E9E9EA] rounded-full peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full shadow-sm" />
+            </label>
+          </div>
+        </div>
+
+        {/* 自动连播开关 */}
+        <div className="flex flex-col select-none">
+          <span className="text-[9px] uppercase tracking-wider text-on-surface-variant font-bold mb-1">自动连播</span>
+          <div className="flex items-center h-[32px]">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoPlayNext}
+                onChange={(e) => handleToggleAutoPlayNext(e.target.checked)}
                 className="sr-only peer"
               />
               <div className="w-9 h-5 bg-[#E9E9EA] rounded-full peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full shadow-sm" />

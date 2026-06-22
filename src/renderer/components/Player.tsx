@@ -41,6 +41,7 @@ export default function Player({
   const lastTimeRef = useRef<number>(0);
   const durationRef = useRef<number>(0);
   const wasPlayingBeforeBlur = useRef<boolean>(false);
+  const isInitiallyFinishedRef = useRef<boolean>(false);
 
   // 1. 初始化和销毁 ArtPlayer
   useEffect(() => {
@@ -348,7 +349,7 @@ export default function Player({
       const finalTime = lastTimeRef.current;
       const finalDuration = durationRef.current;
       if (finalTime > 0 && finalDuration > 0) {
-        const isFinished = finalTime >= finalDuration * 0.95;
+        const isFinished = (finalTime >= finalDuration * 0.95) || isInitiallyFinishedRef.current;
         storageService.saveVideoProgress(videoPath, {
           currentTime: finalTime,
           duration: finalDuration,
@@ -362,6 +363,7 @@ export default function Player({
       console.log('ArtPlayer is ready');
       storageService.loadData().then(data => {
         const record = data.progress[videoPath];
+        isInitiallyFinishedRef.current = record?.isFinished || false;
         if (record && record.currentTime > 0 && record.currentTime < record.duration - 5) {
           art.currentTime = record.currentTime;
           lastTimeRef.current = record.currentTime;
@@ -440,7 +442,7 @@ export default function Player({
         const now = Date.now();
         const timeDiff = Math.abs(currentTime - lastSavedTime);
         const realTimeDiff = now - lastSavedRealTime;
-        const isFinished = currentTime >= duration * 0.95;
+        const isFinished = (currentTime >= duration * 0.95) || isInitiallyFinishedRef.current;
 
         if (isFinished || timeDiff >= 2 || realTimeDiff >= 2000) {
           lastSavedTime = currentTime;
@@ -509,6 +511,15 @@ export default function Player({
 
       // 强制在卸载前同步执行一次最高精度的落盘，使用 lastTimeRef.current 彻底避免 DOM 重置为 0 的问题
       saveProgressForce();
+
+      // 如果当前处于画中画状态，退出画中画，避免切换视频时遗留冻结旧窗口
+      try {
+        if (document.pictureInPictureElement) {
+          document.exitPictureInPicture().catch(e => console.warn('Failed to exit PiP on unmount:', e));
+        }
+      } catch (e) {
+        console.warn('PiP exit error:', e);
+      }
 
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);

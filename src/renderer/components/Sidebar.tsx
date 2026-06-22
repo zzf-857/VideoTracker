@@ -19,6 +19,7 @@ interface SidebarProps {
   fileTree: TreeNode[];
   setFileTree: React.Dispatch<React.SetStateAction<TreeNode[]>>;
   isLoading: boolean;
+  onPlayQueueChange?: (queue: { path: string; name: string }[]) => void;
 }
 
 export interface TreeNode {
@@ -46,7 +47,8 @@ export default function Sidebar({
   setCurrentSource,
   fileTree,
   setFileTree,
-  isLoading
+  isLoading,
+  onPlayQueueChange
 }: SidebarProps) {
   const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -327,6 +329,38 @@ export default function Sidebar({
   };
 
   const sortedFlatVideos = getSortedFlatVideos();
+
+  // 递归提取树中所有的子视频节点 (DFS 顺序)
+  const extractVideosFromTree = (nodes: TreeNode[]): TreeNode[] => {
+    let res: TreeNode[] = [];
+    for (const n of nodes) {
+      if (n.isDir) {
+        if (n.children) {
+          res = res.concat(extractVideosFromTree(n.children));
+        }
+      } else {
+        res.push(n);
+      }
+    }
+    return res;
+  };
+
+  // 监听并动态向外回调计算好的扁平视频播放序列
+  useEffect(() => {
+    if (!onPlayQueueChange) return;
+
+    let queue: TreeNode[] = [];
+    if (viewMode === 'flat') {
+      queue = searchQuery.trim()
+        ? sortedFlatVideos.filter(v => v.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : sortedFlatVideos;
+    } else {
+      const filteredTree = getFilteredTree(fileTree, searchQuery).nodes;
+      queue = extractVideosFromTree(filteredTree);
+    }
+
+    onPlayQueueChange(queue.map(v => ({ path: v.path, name: v.name })));
+  }, [fileTree, viewMode, sortBy, sortOrder, searchQuery, shuffleMap, onPlayQueueChange]);
 
 
 
