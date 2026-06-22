@@ -42,29 +42,21 @@ export default function Dashboard({
 
   const handleTogglePauseOnBlur = async (checked: boolean) => {
     setPauseOnBlur(checked);
-    const data = await storageService.loadData();
-    const updatedSettings = { ...data.settings, pauseOnBlur: checked };
-    await storageService.saveData({ settings: updatedSettings });
+    await storageService.updateSettings({ pauseOnBlur: checked });
   };
 
   const handleToggleAutoPlayNext = async (checked: boolean) => {
     setAutoPlayNext(checked);
-    const data = await storageService.loadData();
-    const updatedSettings = { ...data.settings, autoPlayNext: checked };
-    await storageService.saveData({ settings: updatedSettings });
+    await storageService.updateSettings({ autoPlayNext: checked });
     window.dispatchEvent(new CustomEvent('settings:updated'));
   };
 
   const handleSaveDailyHours = async (val: number) => {
-    const data = await storageService.loadData();
-    const updatedSettings = { ...data.settings, dailyHours: val };
-    await storageService.saveData({ settings: updatedSettings });
+    await storageService.updateSettings({ dailyHours: val });
   };
 
   const handleSaveDailyEpisodes = async (val: number) => {
-    const data = await storageService.loadData();
-    const updatedSettings = { ...data.settings, dailyEpisodes: val };
-    await storageService.saveData({ settings: updatedSettings });
+    await storageService.updateSettings({ dailyEpisodes: val });
   };
   
   // 计算进度百分比

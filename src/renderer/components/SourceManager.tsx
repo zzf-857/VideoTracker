@@ -80,7 +80,7 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
       }
       return s;
     });
-    await storageService.saveData({ sources: updatedSources });
+    await storageService.updateSources(updatedSources);
     setEditingId(null);
     onRefresh();
   };
@@ -304,7 +304,12 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
       updatedSources = [...data.sources, newSource];
     }
 
-    await storageService.saveData({ ...data, sources: updatedSources });
+    await storageService.saveData({
+      progress: data.progress,
+      timelines: data.timelines,
+      dailyLogs: data.dailyLogs,
+      sources: updatedSources
+    });
     
     // 重置并关闭
     resetForm();
@@ -316,7 +321,7 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
     
     const data = await storageService.loadData();
     const updatedSources = data.sources.filter(s => s.id !== id);
-    await storageService.saveData({ sources: updatedSources });
+    await storageService.updateSources(updatedSources);
     onRefresh();
   };
 

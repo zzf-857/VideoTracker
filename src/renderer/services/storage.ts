@@ -268,6 +268,20 @@ class StorageService {
     await this.saveData({ dailyLogs: data.dailyLogs });
     return data;
   }
+
+  // 快捷方法：增量更新系统偏好设置
+  async updateSettings(updates: Partial<AppSettings>): Promise<AppSettings> {
+    const data = await this.loadData();
+    const updatedSettings = { ...data.settings, ...updates };
+    await this.saveData({ settings: updatedSettings });
+    return updatedSettings;
+  }
+
+  // 快捷方法：更新挂载源列表
+  async updateSources(sources: MediaSourceConfig[]): Promise<MediaSourceConfig[]> {
+    await this.saveData({ sources });
+    return sources;
+  }
 }
 
 export const storageService = new StorageService();

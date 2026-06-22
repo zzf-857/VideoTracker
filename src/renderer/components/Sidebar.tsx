@@ -75,9 +75,7 @@ export default function Sidebar({
   }, [refreshSignal]);
 
   const saveSidebarSetting = async (updates: Partial<AppSettings>) => {
-    const data = await storageService.loadData();
-    const updatedSettings = { ...data.settings, ...updates };
-    await storageService.saveData({ settings: updatedSettings });
+    await storageService.updateSettings(updates);
   };
 
   const handleToggleViewMode = () => {

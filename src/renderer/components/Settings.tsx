@@ -73,9 +73,8 @@ interface SettingsProps {
   }, [refreshSignal]);
 
   const handleSaveSettings = async (updates: Partial<AppSettings>) => {
-    const updatedSettings = { ...settings, ...updates };
+    const updatedSettings = await storageService.updateSettings(updates);
     setSettings(updatedSettings);
-    await storageService.saveData({ settings: updatedSettings });
     onRefresh();
     showToast('设置已自动保存');
   };
@@ -111,7 +110,7 @@ interface SettingsProps {
     setWebdavPassword('');
     
     setSettings(defaultSettings);
-    await storageService.saveData({ settings: defaultSettings });
+    await storageService.updateSettings(defaultSettings);
 
     // 一键重置数据路径
     if (window.electronAPI && window.electronAPI.resetStoragePath) {
@@ -254,7 +253,7 @@ interface SettingsProps {
   // 手动执行 WebDAV 同步
   const handleSync = async () => {
     // 先保存当前的 WebDAV 配置
-    const currentSettings: AppSettings = {
+    const currentSettings: Partial<AppSettings> = {
       idleTimeout,
       autoSync,
       pauseOnBlur,
@@ -265,7 +264,7 @@ interface SettingsProps {
       hotkeys: settings.hotkeys
     };
     
-    await storageService.saveData({ settings: currentSettings });
+    await storageService.updateSettings(currentSettings);
     setSyncStatus('syncing');
     setSyncMsg('正在与 WebDAV 同步进度数据...');
 
