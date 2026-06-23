@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { storageService, MediaSourceConfig, VideoProgress, AppHotkeys, getEventHotkeyString } from '../services/storage';
 import { WebDAVClient, WebDAVFile } from '../services/webdav';
 import CustomSelect from './CustomSelect';
+import appLogo from '../assets/app.png';
 
 interface SidebarProps {
   currentTab: string;
@@ -664,8 +665,8 @@ export default function Sidebar({
         {/* 顶部 Logo 与系统标头 */}
         <div className="p-5 border-b border-black/5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 shadow-sm shadow-primary/5">
-              <span className="material-symbols-outlined text-[20px] font-bold">query_stats</span>
+            <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+              <img src={appLogo} alt="Logo" className="w-8 h-8 object-contain" />
             </div>
             <div>
               <h1 className="text-lg font-headline font-extrabold tracking-tight text-on-surface leading-none">VideoTracker</h1>

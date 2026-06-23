@@ -1,6 +1,6 @@
 {
   "name": "videotracker",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "",
   "main": "dist-electron/index.js",
   "scripts": {

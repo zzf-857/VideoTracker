@@ -10,3 +10,4 @@ dist-electron/
 .env.local
 dist-package/
 AppData/
+dist-package-new/
