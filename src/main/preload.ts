@@ -36,4 +36,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkThumbnails: (videoPath: string, times: number[]) => ipcRenderer.invoke('thumbnails:check', videoPath, times),
   saveThumbnail: (videoPath: string, time: number, base64Data: string) => ipcRenderer.invoke('thumbnails:save', videoPath, time, base64Data),
   clearThumbnails: (videoPath: string) => ipcRenderer.invoke('thumbnails:clear', videoPath),
+
+  // 自动更新控制
+  checkUpdates: () => ipcRenderer.invoke('update:check'),
+  quitAndInstall: () => ipcRenderer.invoke('update:quit-and-install'),
+  onUpdateMessage: (callback: (data: any) => void) => {
+    const listener = (_: any, data: any) => callback(data);
+    ipcRenderer.on('update:message', listener);
+    return () => {
+      ipcRenderer.removeListener('update:message', listener);
+    };
+  }
 });

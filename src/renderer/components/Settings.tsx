@@ -41,6 +41,11 @@ interface SettingsProps {
   const [isMigrating, setIsMigrating] = useState(false);
   const [defaultAppPath, setDefaultAppPath] = useState('');
 
+  // 自动更新状态
+  const [updateStatus, setUpdateStatus] = useState<string>('idle');
+  const [updateStatusText, setUpdateStatusText] = useState<string>('');
+  const [downloadPercent, setDownloadPercent] = useState<number>(0);
+
   useEffect(() => {
     storageService.loadData().then(data => {
       setSettings(data.settings);
@@ -198,6 +203,65 @@ interface SettingsProps {
       alert('发生错误：' + (err.message || err));
     } finally {
       setIsMigrating(false);
+    }
+  };
+
+  // 监听自动更新消息与手动检查更新
+  useEffect(() => {
+    if (!window.electronAPI || !window.electronAPI.onUpdateMessage) return;
+
+    const unsubscribe = window.electronAPI.onUpdateMessage((data: any) => {
+      const { status, isPortable, version, percent, error } = data;
+      
+      if (isPortable) {
+        setUpdateStatus('portable');
+        setUpdateStatusText('当前为便携版，请前往 GitHub 手动下载最新版');
+        return;
+      }
+
+      setUpdateStatus(status);
+      switch (status) {
+        case 'checking':
+          setUpdateStatusText('正在检查更新...');
+          break;
+        case 'available':
+          setUpdateStatusText(`发现新版本 v${version}，正在后台下载...`);
+          break;
+        case 'latest':
+          setUpdateStatusText('当前已是最新版本');
+          break;
+        case 'downloading':
+          setUpdateStatusText(`正在下载更新包...`);
+          setDownloadPercent(Math.round(percent || 0));
+          break;
+        case 'downloaded':
+          setUpdateStatusText(`新版本 v${version} 已下载完成`);
+          break;
+        case 'error':
+          setUpdateStatusText(`更新失败: ${error || '网络连接异常'}`);
+          break;
+        default:
+          break;
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleManualCheckUpdate = async () => {
+    if (!window.electronAPI || !window.electronAPI.checkUpdates) return;
+    setUpdateStatus('checking');
+    setUpdateStatusText('正在连接 GitHub 检查更新...');
+    const res = await window.electronAPI.checkUpdates();
+    if (!res.success) {
+      setUpdateStatus('error');
+      setUpdateStatusText(`检查更新失败: ${res.error || '无法连接到服务器'}`);
+    }
+  };
+
+  const handleQuitAndInstall = () => {
+    if (window.electronAPI && window.electronAPI.quitAndInstall) {
+      window.electronAPI.quitAndInstall();
     }
   };
 
@@ -706,6 +770,73 @@ interface SettingsProps {
                     <p className="text-[10px] text-on-surface-variant">沉浸式无干扰学习</p>
                   </div>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 4. 软件版本与自动更新 */}
+          <section className="apple-card rounded-2xl p-6 bg-white/80 transition-all hover:shadow-md">
+            <h3 className="font-bold text-base text-on-surface mb-4">版本与更新</h3>
+            
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 bg-black/[0.01] border border-black/5 rounded-xl">
+                <div>
+                  <p className="text-xs font-semibold text-on-surface">当前软件版本</p>
+                  <p className="text-[10px] text-on-surface-variant">当前运行的版本号</p>
+                </div>
+                <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-full font-mono">
+                  v1.0.5
+                </span>
+              </div>
+
+              <div className="p-3 bg-black/[0.01] border border-black/5 rounded-xl space-y-3">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-xs font-semibold text-on-surface">检查新版本</p>
+                    <p className="text-[10px] text-on-surface-variant">连接 GitHub 获取最新版本</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleManualCheckUpdate}
+                    disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
+                    className="py-1.5 px-4 bg-primary text-white text-xs font-bold rounded-xl flex items-center gap-1.5 hover:opacity-90 active:scale-95 transition-all shadow-md shadow-primary/10 disabled:opacity-50 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">sync</span>
+                    {updateStatus === 'checking' ? '检查中...' : updateStatus === 'downloading' ? '正在下载...' : '立即检查'}
+                  </button>
+                </div>
+
+                {/* 状态与进度条显示 */}
+                {updateStatus !== 'idle' && (
+                  <div className="pt-2 border-t border-black/[0.03] space-y-2 animate-fade-in">
+                    <div className="flex justify-between items-center text-[10px] font-bold">
+                      <span className="text-on-surface-variant">{updateStatusText}</span>
+                      {updateStatus === 'downloading' && (
+                        <span className="text-primary font-mono">{downloadPercent}%</span>
+                      )}
+                    </div>
+
+                    {updateStatus === 'downloading' && (
+                      <div className="w-full bg-black/[0.05] h-1.5 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-primary h-full rounded-full transition-all duration-150"
+                          style={{ width: `${downloadPercent}%` }}
+                        />
+                      </div>
+                    )}
+
+                    {updateStatus === 'downloaded' && (
+                      <button
+                        type="button"
+                        onClick={handleQuitAndInstall}
+                        className="w-full py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all shadow-md shadow-green-500/10 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">restart_alt</span>
+                        下载完成，立即重启升级
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </section>

@@ -37,6 +37,7 @@ jobs:
           files: |
             dist-package/*.exe
             dist-package/*.blockmap
+            dist-package/*.yml
           draft: false
           prerelease: false
         env:

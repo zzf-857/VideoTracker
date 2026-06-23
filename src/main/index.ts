@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -302,7 +303,85 @@ function scanDirectory(dirPath: string): FileNode[] {
   });
 }
 
-// 3. 创建应用窗口
+// 3. 自动更新逻辑
+function setupAutoUpdater() {
+  // 配置 autoUpdater
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  // 检查是否为便携版
+  const isPortable = !!process.env.PORTABLE_EXECUTABLE_DIR;
+
+  // 辅助函数：向渲染层广播消息
+  const sendUpdateMessage = (status: string, payload: any = {}) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:message', { status, isPortable, ...payload });
+    }
+  };
+
+  // 注册监听器
+  autoUpdater.on('checking-for-update', () => {
+    sendUpdateMessage('checking');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    sendUpdateMessage('available', { version: info.version, info });
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    sendUpdateMessage('latest', { version: info.version, info });
+  });
+
+  autoUpdater.on('error', (err) => {
+    sendUpdateMessage('error', { error: err.message || err });
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    sendUpdateMessage('downloading', {
+      percent: progressObj.percent,
+      bytesPerSecond: progressObj.bytesPerSecond,
+      transferred: progressObj.transferred,
+      total: progressObj.total
+    });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdateMessage('downloaded', { version: info.version, info });
+  });
+
+  // 注册 IPC 接口
+  ipcMain.handle('update:check', async () => {
+    if (isPortable) {
+      return { isPortable: true, status: 'portable' };
+    }
+    if (!app.isPackaged) {
+      return { success: false, error: '开发环境跳过更新检查' };
+    }
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      return { success: true, result };
+    } catch (err: any) {
+      return { success: false, error: err.message || err };
+    }
+  });
+
+  ipcMain.handle('update:quit-and-install', async () => {
+    if (isPortable) return false;
+    autoUpdater.quitAndInstall();
+    return true;
+  });
+
+  // 启动 5 秒后静默检查更新
+  if (app.isPackaged && !isPortable) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(err => {
+        console.error('[AutoUpdate] Startup check failed:', err);
+      });
+    }, 5000);
+  }
+}
+
+// 4. 创建应用窗口
 function createWindow() {
   const preloadPath = path.join(__dirname, 'preload.js');
   const iconPath = path.join(__dirname, '../Assets/app.ico');
@@ -356,6 +435,9 @@ function createWindow() {
 app.whenReady().then(() => {
   // 启动流服务器
   startStreamServer();
+
+  // 初始化自动更新
+  setupAutoUpdater();
 
   // 注册 IPC Handler 供 preload 调用
   

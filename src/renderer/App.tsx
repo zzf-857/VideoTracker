@@ -66,6 +66,9 @@ export default function App() {
   const [activeChapters, setActiveChapters] = useState<Chapter[]>([]);
   const [seekSignal, setSeekSignal] = useState<{ seconds: number; time: number } | null>(null);
 
+  // 自动更新通知状态
+  const [updateNoticeVersion, setUpdateNoticeVersion] = useState<string | null>(null);
+
   const startResizing = (mouseDownEvent: React.MouseEvent) => {
     mouseDownEvent.preventDefault();
     setIsResizing(true);
@@ -264,6 +267,20 @@ export default function App() {
       setIsPlaying(false);
     }
   }, [currentTab]);
+
+  // 监听全局自动更新消息（主要是在后台自动下载完成时提示用户）
+  useEffect(() => {
+    if (!window.electronAPI || !window.electronAPI.onUpdateMessage) return;
+
+    const unsubscribe = window.electronAPI.onUpdateMessage((data: any) => {
+      const { status, version, isPortable } = data;
+      if (status === 'downloaded' && version && !isPortable) {
+        setUpdateNoticeVersion(version);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#F5F5F7]">
@@ -536,6 +553,41 @@ export default function App() {
           >
             <span className="material-symbols-outlined text-[20px]">toc</span>
           </button>
+        </div>
+      )}
+
+      {/* 自动更新完成全局提示气泡 */}
+      {updateNoticeVersion && (
+        <div className="fixed bottom-6 right-6 z-[1000] w-80 bg-white/95 backdrop-blur-xl border border-black/5 rounded-2xl p-4 shadow-[0_12px_40px_rgba(0,0,0,0.15)] flex flex-col gap-3 animate-fade-in select-none">
+          <div className="flex gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0">
+              <span className="material-symbols-outlined text-[20px] font-bold">system_update_alt</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-bold text-xs text-on-surface">新版本就绪</h4>
+              <p className="text-[10px] text-on-surface-variant leading-relaxed mt-0.5">
+                新版本 v{updateNoticeVersion} 已经后台下载完成，是否立即重启升级？
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-black/[0.03] pt-3">
+            <button
+              onClick={() => setUpdateNoticeVersion(null)}
+              className="px-3 py-1.5 bg-black/[0.03] hover:bg-black/[0.06] text-on-surface text-[10px] font-bold rounded-lg transition-all cursor-pointer"
+            >
+              稍后
+            </button>
+            <button
+              onClick={() => {
+                if (window.electronAPI && window.electronAPI.quitAndInstall) {
+                  window.electronAPI.quitAndInstall();
+                }
+              }}
+              className="px-4 py-1.5 bg-primary hover:opacity-90 text-white text-[10px] font-bold rounded-lg transition-all shadow-sm shadow-primary/20 cursor-pointer"
+            >
+              立即重启
+            </button>
+          </div>
         </div>
       )}
     </div>
