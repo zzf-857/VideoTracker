@@ -58,6 +58,7 @@ export interface AppSettings {
   sortBy?: 'name' | 'size' | 'ext' | 'mtime' | 'duration' | 'shuffle'; // 排序类型
   sortOrder?: 'asc' | 'desc'; // 排序顺序
   expandedPaths?: Record<string, boolean>; // 树节点展开路径集
+  rightSidebarStatus?: 'closed' | 'footprint' | 'chapters'; // 右侧边栏状态
 }
 
 // 统一数据接口
@@ -94,6 +95,7 @@ const DEFAULT_DATA: AppDataStore = {
     dailyEpisodes: 3,
     playbackSpeed: 1.25,
     isSidebarCollapsed: false,
+    rightSidebarStatus: 'closed',
     viewMode: 'tree',
     sortBy: 'name',
     sortOrder: 'asc',
@@ -147,6 +149,7 @@ class StorageService {
         dailyEpisodes: this.cache?.settings?.dailyEpisodes ?? 3,
         playbackSpeed: this.cache?.settings?.playbackSpeed ?? 1.25,
         isSidebarCollapsed: this.cache?.settings?.isSidebarCollapsed ?? false,
+        rightSidebarStatus: this.cache?.settings?.rightSidebarStatus ?? 'closed',
         viewMode: this.cache?.settings?.viewMode ?? 'tree',
         sortBy: this.cache?.settings?.sortBy ?? 'name',
         sortOrder: this.cache?.settings?.sortOrder ?? 'asc',

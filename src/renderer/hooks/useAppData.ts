@@ -66,6 +66,9 @@ export function useAppData() {
   // 侧边栏折叠状态
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 
+  // 右侧边栏状态
+  const [rightSidebarStatus, setRightSidebarStatus] = useState<'closed' | 'footprint' | 'chapters'>('closed');
+
   // 文件树管理
   const [sources, setSources] = useState<MediaSourceConfig[]>([]);
   const [fileTree, setFileTree] = useState<TreeNode[]>([]);
@@ -84,6 +87,7 @@ export function useAppData() {
       setSources(data.sources);
       setPlaybackSpeed(data.settings.playbackSpeed ?? 1.25);
       setIsSidebarCollapsed(data.settings.isSidebarCollapsed ?? false);
+      setRightSidebarStatus(data.settings.rightSidebarStatus ?? 'closed');
       
       console.log('[AutoRestore] Loaded appData. lastPlayedVideo:', data.lastPlayedVideo);
       
@@ -221,6 +225,11 @@ export function useAppData() {
   const handleSidebarCollapse = async (collapsed: boolean) => {
     setIsSidebarCollapsed(collapsed);
     await storageService.updateSettings({ isSidebarCollapsed: collapsed });
+  };
+
+  const handleRightSidebarStatusChange = async (status: 'closed' | 'footprint' | 'chapters') => {
+    setRightSidebarStatus(status);
+    await storageService.updateSettings({ rightSidebarStatus: status });
   };
 
   const handleRefresh = () => {
@@ -499,6 +508,8 @@ export function useAppData() {
     playbackSpeed,
     isSidebarCollapsed,
     setIsSidebarCollapsed,
+    rightSidebarStatus,
+    handleRightSidebarStatusChange,
     fileTree,
     setFileTree,
     isLoadingFileTree,

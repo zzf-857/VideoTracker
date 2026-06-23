@@ -25,6 +25,8 @@ export default function App() {
     currentPlayTime,
     playbackSpeed,
     isSidebarCollapsed,
+    rightSidebarStatus,
+    handleRightSidebarStatusChange,
     fileTree,
     setFileTree,
     isLoadingFileTree,
@@ -53,8 +55,8 @@ export default function App() {
   const [leftHover, setLeftHover] = useState<boolean>(false);
 
   // 右侧双抽屉展开与缩放状态
-  const [isFootprintOpen, setIsFootprintOpen] = useState<boolean>(false);
-  const [isChaptersOpen, setIsChaptersOpen] = useState<boolean>(false);
+  const isFootprintOpen = rightSidebarStatus === 'footprint';
+  const isChaptersOpen = rightSidebarStatus === 'chapters' && !!activeVideoPath;
   const [footprintWidth, setFootprintWidth] = useState<number>(320);
   const [chaptersWidth, setChaptersWidth] = useState<number>(340);
   const [isFootprintResizing, setIsFootprintResizing] = useState<boolean>(false);
@@ -245,6 +247,8 @@ export default function App() {
     setGenerationProgress(null);
   };
 
+  const isFirstVideoLoad = useRef<boolean>(true);
+
   useEffect(() => {
     // 切换视频时清空相关状态
     queueRef.current = [];
@@ -252,14 +256,24 @@ export default function App() {
     setGenerationProgress(null);
     setActiveChapters([]);
     setSeekSignal(null);
-    // 当关闭或切视频时，默认把章节抽屉打开，提高交互连贯性
+    
+    // 判断是否是自动恢复上次视频的情况，如果是，保留原有侧边栏状态，不强行切成章节
+    const shouldSkipSidebarChange = isFirstVideoLoad.current && appData?.lastPlayedVideo;
     if (activeVideoPath) {
-      setIsChaptersOpen(true);
-      setIsFootprintOpen(false);
-    } else {
-      setIsChaptersOpen(false);
+      isFirstVideoLoad.current = false;
     }
-  }, [activeVideoPath]);
+
+    if (shouldSkipSidebarChange) {
+      return;
+    }
+
+    // 后续在软件内选择视频播放，默认把章节抽屉打开，提高交互连贯性
+    if (activeVideoPath) {
+      handleRightSidebarStatusChange('chapters');
+    } else {
+      handleRightSidebarStatusChange('closed');
+    }
+  }, [activeVideoPath, appData]);
 
   // 切换选项卡时，若切出播放大屏，强制停止计时
   useEffect(() => {
@@ -520,8 +534,7 @@ export default function App() {
         <div className="h-full w-14 bg-white border-l border-black/5 flex flex-col items-center py-6 gap-5 z-40 relative flex-shrink-0">
           <button
             onClick={() => {
-              setIsFootprintOpen(!isFootprintOpen);
-              setIsChaptersOpen(false);
+              handleRightSidebarStatusChange(rightSidebarStatus === 'footprint' ? 'closed' : 'footprint');
             }}
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
               isFootprintOpen 
@@ -539,8 +552,7 @@ export default function App() {
                 alert('请先选择视频播放，以使用章节时间轴');
                 return;
               }
-              setIsChaptersOpen(!isChaptersOpen);
-              setIsFootprintOpen(false);
+              handleRightSidebarStatusChange(rightSidebarStatus === 'chapters' ? 'closed' : 'chapters');
             }}
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
               !activeVideoPath ? 'opacity-40 cursor-not-allowed' : ''
