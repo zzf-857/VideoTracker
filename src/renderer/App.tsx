@@ -378,6 +378,7 @@ export default function App() {
                       sourceId={currentSource?.id}
                       nextVideoName={appData?.settings.autoPlayNext ? nextVideo?.name : undefined}
                       pauseOnBlur={appData?.settings.pauseOnBlur}
+                      isFinished={activeVideoPath ? (appData?.progress[activeVideoPath]?.isFinished || false) : false}
                     />
                   );
                 })()

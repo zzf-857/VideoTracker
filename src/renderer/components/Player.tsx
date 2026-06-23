@@ -22,6 +22,7 @@ interface PlayerProps {
   sourceId?: string; // 新增：视频所属数据源 ID
   nextVideoName?: string; // 新增：下一个视频的名字 (用于连播提示)
   pauseOnBlur?: boolean; // 新增：失去焦点自动暂停
+  isFinished?: boolean; // 新增：视频当前的已学完状态 (由外部驱动，如手动标记)
 }
 
 export default function Player({
@@ -38,7 +39,8 @@ export default function Player({
   seekSignal,
   sourceId = '',
   nextVideoName,
-  pauseOnBlur = true
+  pauseOnBlur = true,
+  isFinished = false
 }: PlayerProps) {
   const artRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<Artplayer | null>(null);
@@ -586,6 +588,11 @@ export default function Player({
       playerInstanceRef.current.notice.show = `跳转章节: ${seekSignal.seconds} 秒`;
     }
   }, [seekSignal]);
+
+  // 新增：同步外部的手动标记已学完/未学完状态变化
+  useEffect(() => {
+    isInitiallyFinishedRef.current = isFinished;
+  }, [isFinished]);
 
   // 3. 监听全局自定义快捷键（排除输入法和表单聚焦状态）
   useEffect(() => {
