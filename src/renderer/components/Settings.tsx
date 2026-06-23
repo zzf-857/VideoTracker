@@ -244,7 +244,14 @@ interface SettingsProps {
           setUpdateStatusText(`新版本 v${version} 已下载完成`);
           break;
         case 'error':
-          setUpdateStatusText(`更新失败: ${error || '网络连接异常'}`);
+          {
+            const errStr = String(error || '').toLowerCase();
+            let friendlyError = '检查更新失败，请检查网络连接或稍后再试';
+            if (errStr.includes('404') || errStr.includes('not found') || errStr.includes('latest.yml')) {
+              friendlyError = '未检测到线上的正式发布版本';
+            }
+            setUpdateStatusText(friendlyError);
+          }
           break;
         default:
           break;
@@ -261,7 +268,12 @@ interface SettingsProps {
     const res = await window.electronAPI.checkUpdates();
     if (!res.success) {
       setUpdateStatus('error');
-      setUpdateStatusText(`检查更新失败: ${res.error || '无法连接到服务器'}`);
+      const errStr = String(res.error || '').toLowerCase();
+      let friendlyError = '检查更新失败，请检查网络连接或稍后再试';
+      if (errStr.includes('404') || errStr.includes('not found') || errStr.includes('latest.yml')) {
+        friendlyError = '未检测到线上的正式发布版本';
+      }
+      setUpdateStatusText(friendlyError);
     }
   };
 
