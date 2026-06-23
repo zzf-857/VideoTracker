@@ -10,3 +10,4 @@ dist-electron/
 .env.local
 dist-package/
 AppData/
+docs/release_and_updater_manual.md
