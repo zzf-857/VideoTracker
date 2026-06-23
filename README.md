@@ -131,6 +131,11 @@ npm run build
 | **本地数据** | `%APPDATA%/VideoTracker/` (包含视频进度、学习时长、快捷键绑定等 JSON 数据) |
 | **云端同步** | 在 **系统设置** 中配置 WebDAV 即可实现多端自动/手动同步备份 |
 
+## 🗺️ 移动端与服务器部署规划
+
+关于将本项目部署至轻量服务器（如 1panel），并在手机网页端（PWA）或通过 **Capacitor** 封装为 **iOS 客户端 App** 的未来发展方案，请参考专属规划文档：
+* [docs/MOBILE_PLAN.md](file:///f:/AI/AIMadeupTools/01_DesktopApps/VideoTracker/docs/MOBILE_PLAN.md) - 移动端及部署适配方案与 TODO List。
+
 ## 🤝 贡献
 
 欢迎提交 Issue 和 Pull Request！

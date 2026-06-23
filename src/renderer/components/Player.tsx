@@ -46,10 +46,18 @@ export default function Player({
   const durationRef = useRef<number>(0);
   const wasPlayingBeforeBlur = useRef<boolean>(false);
   const isInitiallyFinishedRef = useRef<boolean>(false);
+  const isProgressLoadedRef = useRef<boolean>(false);
 
   // 1. 初始化和销毁 ArtPlayer
   useEffect(() => {
     if (!artRef.current) return;
+
+    // 重置相关 Ref，防止切换视频时残留前一个视频的数据导致数据污染 Bug
+    lastTimeRef.current = 0;
+    durationRef.current = 0;
+    isInitiallyFinishedRef.current = false;
+    wasPlayingBeforeBlur.current = false;
+    isProgressLoadedRef.current = false;
 
     let isUnmounting = false;
 
@@ -351,6 +359,7 @@ export default function Player({
 
     // 强制无节流直接保存当前播放进度的方法
     const saveProgressForce = () => {
+      if (!isProgressLoadedRef.current) return;
       const finalTime = lastTimeRef.current;
       const finalDuration = durationRef.current;
       if (finalTime > 0 && finalDuration > 0) {
@@ -390,6 +399,9 @@ export default function Player({
         if (sourceId) {
           storageService.saveLastPlayedVideo(videoPath, videoName, sourceId);
         }
+
+        // 标记为已成功从存储中恢复/读取完进度，允许后续写入保存
+        isProgressLoadedRef.current = true;
       });
       updateProgressGaps();
     });
@@ -434,6 +446,7 @@ export default function Player({
 
     art.on('video:timeupdate', () => {
       if (isUnmounting) return;
+      if (!isProgressLoadedRef.current) return;
       const currentTime = art.currentTime;
       const duration = art.duration;
       if (duration > 0) {
@@ -470,6 +483,7 @@ export default function Player({
 
     art.on('video:ended', () => {
       if (onPlayStateChange) onPlayStateChange(false);
+      if (!isProgressLoadedRef.current) return;
       
       // 标记为看毕
       storageService.saveVideoProgress(videoPath, {
