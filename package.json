@@ -1,6 +1,6 @@
 {
   "name": "videotracker",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "",
   "main": "dist-electron/index.js",
   "scripts": {
@@ -43,7 +43,7 @@
     "appId": "com.videotracker.app",
     "productName": "VideoTracker",
     "directories": {
-      "output": "C:/Users/admin/VideoTracker-dist"
+      "output": "dist-package"
     },
     "publish": [
       {

@@ -37,6 +37,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveThumbnail: (videoPath: string, time: number, base64Data: string) => ipcRenderer.invoke('thumbnails:save', videoPath, time, base64Data),
   clearThumbnails: (videoPath: string) => ipcRenderer.invoke('thumbnails:clear', videoPath),
 
+  // 获取应用版本号
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
+
   // 自动更新控制
   checkUpdates: () => ipcRenderer.invoke('update:check'),
   quitAndInstall: () => ipcRenderer.invoke('update:quit-and-install'),

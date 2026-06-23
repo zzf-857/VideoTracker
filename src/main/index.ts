@@ -666,6 +666,11 @@ app.whenReady().then(() => {
     return false;
   });
 
+  // 获取当前应用版本号
+  ipcMain.handle('app:getVersion', () => {
+    return app.getVersion();
+  });
+
   // 检查缩略图存在性
   ipcMain.handle('thumbnails:check', async (_event, videoPath: string, times: number[]) => {
     try {

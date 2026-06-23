@@ -45,6 +45,7 @@ interface SettingsProps {
   const [updateStatus, setUpdateStatus] = useState<string>('idle');
   const [updateStatusText, setUpdateStatusText] = useState<string>('');
   const [downloadPercent, setDownloadPercent] = useState<number>(0);
+  const [appVersion, setAppVersion] = useState<string>('');
 
   useEffect(() => {
     storageService.loadData().then(data => {
@@ -72,6 +73,11 @@ interface SettingsProps {
       if (window.electronAPI.getDefaultAppPath) {
         window.electronAPI.getDefaultAppPath().then((path: string) => {
           setDefaultAppPath(path);
+        });
+      }
+      if (window.electronAPI.getVersion) {
+        window.electronAPI.getVersion().then((ver: string) => {
+          setAppVersion(ver);
         });
       }
     }
@@ -785,7 +791,7 @@ interface SettingsProps {
                   <p className="text-[10px] text-on-surface-variant">当前运行的版本号</p>
                 </div>
                 <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-full font-mono">
-                  v1.0.5
+                  v{appVersion}
                 </span>
               </div>
 
