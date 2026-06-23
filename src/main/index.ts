@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -438,6 +438,9 @@ app.whenReady().then(() => {
 
   // 初始化自动更新
   setupAutoUpdater();
+
+  // 隐藏顶部默认工具菜单栏
+  Menu.setApplicationMenu(null);
 
   // 注册 IPC Handler 供 preload 调用
   

@@ -663,11 +663,16 @@ export default function Sidebar({
       <aside className="w-full flex flex-col bg-white/80 backdrop-blur-xl border-r border-black/5 h-full overflow-hidden select-none">
         {/* 顶部 Logo 与系统标头 */}
         <div className="p-5 border-b border-black/5 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-headline font-extrabold tracking-tight text-on-surface">VideoTracker</h1>
-            <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider mt-0.5 opacity-70">
-              学习跟踪仪表盘
-            </p>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 shadow-sm shadow-primary/5">
+              <span className="material-symbols-outlined text-[20px] font-bold">query_stats</span>
+            </div>
+            <div>
+              <h1 className="text-lg font-headline font-extrabold tracking-tight text-on-surface leading-none">VideoTracker</h1>
+              <p className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider opacity-70 leading-none mt-1">
+                学习跟踪仪表盘
+              </p>
+            </div>
           </div>
           
           {/* 收起侧边栏按钮 */}
