@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { storageService, AppDataStore, MediaSourceConfig, VideoProgress } from '../services/storage';
+import { storageService, AppDataStore, MediaSourceConfig } from '../services/storage';
 import { useTimer } from './useTimer';
 import { WebDAVClient } from '../services/webdav';
+import { migrateProgressForFileTree } from '../services/progressMigration';
 
 export interface TreeNode {
   name: string;
@@ -50,6 +51,10 @@ export function useAppData() {
   const [currentSource, setCurrentSource] = useState<MediaSourceConfig | null>(null);
   const currentSourceRef = useRef<MediaSourceConfig | null>(null);
   currentSourceRef.current = currentSource;
+  const migrationSourceIdRef = useRef<string | null>(null);
+  const migrationProcessedPathsRef = useRef<Set<string>>(new Set());
+  const migrationPreviousSourceRootRef = useRef<string | undefined>(undefined);
+  const isProgressMigrationRunningRef = useRef<boolean>(false);
   
   // 当前播放视频信息
   const [activeVideoUrl, setActiveVideoUrl] = useState<string>('');
@@ -279,7 +284,7 @@ export function useAppData() {
   };
 
   // 监听播放器时间更新
-  const handleTimeUpdate = (currentTime: number, duration: number) => {
+  const handleTimeUpdate = (currentTime: number, _duration: number) => {
     setCurrentPlayTime(currentTime);
   };
 
@@ -323,8 +328,82 @@ export function useAppData() {
     return getVideoStreamUrlByPath(node.path, currentSource);
   };
 
+  // 文件树加载完成后，无感迁移因移动/改名/换根目录导致丢失的历史进度
+  useEffect(() => {
+    if (!appData || !currentSource || fileTree.length === 0) return;
+
+    const sourceChanged = migrationSourceIdRef.current !== currentSource.id;
+    if (sourceChanged) {
+      migrationSourceIdRef.current = currentSource.id;
+      migrationProcessedPathsRef.current = new Set();
+    }
+
+    const flattenVideos = (nodes: TreeNode[]): TreeNode[] => {
+      let videos: TreeNode[] = [];
+      for (const node of nodes) {
+        if (node.isDir) {
+          if (node.children) {
+            videos = videos.concat(flattenVideos(node.children));
+          }
+        } else {
+          videos.push(node);
+        }
+      }
+      return videos;
+    };
+
+    const flatVideos = flattenVideos(fileTree);
+    const pendingVideos = flatVideos.filter(video => {
+      const processed = migrationProcessedPathsRef.current.has(video.path);
+      const progress = appData.progress[video.path];
+      const needsSizeBackfill = !!progress && typeof video.size === 'number' && progress.size !== video.size;
+      return !processed || needsSizeBackfill;
+    });
+
+    if (pendingVideos.length === 0) {
+      migrationPreviousSourceRootRef.current = currentSource.path;
+      return;
+    }
+
+    const result = migrateProgressForFileTree({
+      data: appData,
+      currentSource,
+      previousSourceRoot: migrationPreviousSourceRootRef.current,
+      fileTree
+    });
+
+    migrationPreviousSourceRootRef.current = currentSource.path;
+
+    if (!result.changed) {
+      pendingVideos.forEach(video => migrationProcessedPathsRef.current.add(video.path));
+      return;
+    }
+
+    let active = true;
+    isProgressMigrationRunningRef.current = true;
+
+    storageService.saveData(result.data).then(success => {
+      if (!active) return;
+      if (success) {
+        pendingVideos.forEach(video => migrationProcessedPathsRef.current.add(video.path));
+        setAppData(result.data);
+      } else {
+        console.warn('Progress migration save failed.');
+      }
+    }).finally(() => {
+      if (active) {
+        isProgressMigrationRunningRef.current = false;
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [appData, currentSource, fileTree]);
+
   // 后台静默扫描未播视频的时长并保存
   useEffect(() => {
+    if (isProgressMigrationRunningRef.current) return;
     if (!appData || !currentSource || fileTree.length === 0) return;
 
     let active = true;
@@ -412,7 +491,8 @@ export function useAppData() {
           await storageService.saveVideoProgress(node.path, {
             currentTime: 0,
             duration,
-            isFinished: false
+            isFinished: false,
+            size: node.size
           });
 
           // 局部更新 state 以刷新 UI，避免调用 loadData 造成全局重新请求的开销
@@ -426,7 +506,8 @@ export function useAppData() {
                   currentTime: 0,
                   duration,
                   isFinished: false,
-                  lastPlayedTime: Date.now()
+                  lastPlayedTime: Date.now(),
+                  size: node.size
                 }
               }
             };

@@ -6,6 +6,7 @@ export interface VideoProgress {
   duration: number;
   isFinished: boolean;
   lastPlayedTime: number;
+  size?: number; // 视频字节大小，用作路径变更后的轻量物理指纹
 }
 
 export interface PlayedVideoLog {
