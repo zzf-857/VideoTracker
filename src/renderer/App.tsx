@@ -247,33 +247,14 @@ export default function App() {
     setGenerationProgress(null);
   };
 
-  const isFirstVideoLoad = useRef<boolean>(true);
-
   useEffect(() => {
-    // 切换视频时清空相关状态
+    // 切换视频时只清空与当前视频绑定的临时状态；右侧栏选项由用户手动选择并持久化。
     queueRef.current = [];
     isGeneratingRef.current = false;
     setGenerationProgress(null);
     setActiveChapters([]);
     setSeekSignal(null);
-    
-    // 判断是否是自动恢复上次视频的情况，如果是，保留原有侧边栏状态，不强行切成章节
-    const shouldSkipSidebarChange = isFirstVideoLoad.current && appData?.lastPlayedVideo;
-    if (activeVideoPath) {
-      isFirstVideoLoad.current = false;
-    }
-
-    if (shouldSkipSidebarChange) {
-      return;
-    }
-
-    // 后续在软件内选择视频播放，默认把章节抽屉打开，提高交互连贯性
-    if (activeVideoPath) {
-      handleRightSidebarStatusChange('chapters');
-    } else {
-      handleRightSidebarStatusChange('closed');
-    }
-  }, [activeVideoPath, appData]);
+  }, [activeVideoPath]);
 
   // 切换选项卡时，若切出播放大屏，强制停止计时
   useEffect(() => {
