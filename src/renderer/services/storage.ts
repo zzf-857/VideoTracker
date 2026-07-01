@@ -1,4 +1,6 @@
 // 检查是否处于 Electron 环境
+import type { SubtitleAttachment } from './subtitles';
+
 const isElectron = typeof window !== 'undefined' && 'electronAPI' in window;
 
 export interface VideoProgress {
@@ -69,6 +71,7 @@ export interface AppDataStore {
   sources: MediaSourceConfig[];
   settings: AppSettings;
   timelines?: Record<string, string>; // key 是视频的相对路径或唯一标识
+  subtitles?: Record<string, SubtitleAttachment>; // key 是视频的相对路径或唯一标识
   lastPlayedVideo?: {
     path: string;
     name: string;
@@ -102,7 +105,8 @@ const DEFAULT_DATA: AppDataStore = {
     sortOrder: 'asc',
     expandedPaths: {}
   },
-  timelines: {}
+  timelines: {},
+  subtitles: {}
 };
 
 export function getLocalDateString(date: Date = new Date()): string {
@@ -157,6 +161,7 @@ class StorageService {
         expandedPaths: this.cache?.settings?.expandedPaths ?? {}
       },
       timelines: this.cache?.timelines || {},
+      subtitles: this.cache?.subtitles || {},
       lastPlayedVideo: this.cache?.lastPlayedVideo
     };
 
@@ -192,6 +197,25 @@ class StorageService {
     if (data.timelines && data.timelines[videoPath]) {
       delete data.timelines[videoPath];
       await this.saveData({ timelines: data.timelines });
+    }
+  }
+
+  // 快捷方法：保存外部字幕配置
+  async saveSubtitle(videoPath: string, subtitle: SubtitleAttachment): Promise<void> {
+    const data = await this.loadData();
+    if (!data.subtitles) {
+      data.subtitles = {};
+    }
+    data.subtitles[videoPath] = subtitle;
+    await this.saveData({ subtitles: data.subtitles });
+  }
+
+  // 快捷方法：删除外部字幕配置
+  async deleteSubtitle(videoPath: string): Promise<void> {
+    const data = await this.loadData();
+    if (data.subtitles && data.subtitles[videoPath]) {
+      delete data.subtitles[videoPath];
+      await this.saveData({ subtitles: data.subtitles });
     }
   }
 

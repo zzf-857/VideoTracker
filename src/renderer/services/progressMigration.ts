@@ -148,7 +148,15 @@ function cloneData(data: AppDataStore): AppDataStore {
         }
       ])
     ),
-    timelines: data.timelines ? { ...data.timelines } : {}
+    timelines: data.timelines ? { ...data.timelines } : {},
+    subtitles: data.subtitles
+      ? Object.fromEntries(
+          Object.entries(data.subtitles).map(([path, subtitle]) => [
+            path,
+            { ...subtitle }
+          ])
+        )
+      : {}
   };
 }
 
@@ -418,6 +426,13 @@ export function migrateProgressForFileTree(options: ProgressMigrationOptions): P
     if (nextData.timelines && nextData.timelines[migration.from] !== undefined && nextData.timelines[migration.to] === undefined) {
       nextData.timelines[migration.to] = nextData.timelines[migration.from];
       delete nextData.timelines[migration.from];
+    }
+
+    if (nextData.subtitles && nextData.subtitles[migration.from] !== undefined) {
+      if (nextData.subtitles[migration.to] === undefined) {
+        nextData.subtitles[migration.to] = nextData.subtitles[migration.from];
+      }
+      delete nextData.subtitles[migration.from];
     }
 
     if (nextData.lastPlayedVideo?.path === migration.from) {

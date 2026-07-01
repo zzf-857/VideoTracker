@@ -11,9 +11,10 @@
     "dev:renderer": "vite",
     "dev": "concurrently -k -r -n \"main,renderer,app\" -c \"magenta,cyan,blue\" \"npm run dev:main\" \"npm run dev:renderer\" \"electron .\"",
     "test:migration": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/progressMigration.test.ts --bundle --platform=node --format=cjs --outfile=.temp/progressMigration.test.cjs && node .temp/progressMigration.test.cjs",
+    "test:subtitles": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/subtitles.test.ts --bundle --platform=node --format=cjs --outfile=.temp/subtitles.test.cjs && node .temp/subtitles.test.cjs",
     "test:planning": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/planningStats.test.ts --bundle --platform=node --format=cjs --outfile=.temp/planningStats.test.cjs && node .temp/planningStats.test.cjs",
     "test:player-lifecycle": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/playerChapterLifecycle.test.ts --bundle --platform=node --format=cjs --outfile=.temp/playerChapterLifecycle.test.cjs && node .temp/playerChapterLifecycle.test.cjs",
-    "test": "npm run test:migration && npm run test:planning && npm run test:player-lifecycle",
+    "test": "npm run test:migration && npm run test:subtitles && npm run test:planning && npm run test:player-lifecycle",
     "package": "npm run build && electron-builder --win"
   },
   "keywords": [],

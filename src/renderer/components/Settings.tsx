@@ -5,7 +5,8 @@ import { syncService } from '../services/sync';
 interface SettingsProps {
   refreshSignal: number;
   onRefresh: () => void;
-}export default function Settings({ refreshSignal, onRefresh }: SettingsProps) {
+  availableUpdateVersion?: string | null;
+}export default function Settings({ refreshSignal, onRefresh, availableUpdateVersion }: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>({
     idleTimeout: 15,
     autoSync: false,
@@ -82,6 +83,12 @@ interface SettingsProps {
       }
     }
   }, [refreshSignal]);
+
+  useEffect(() => {
+    if (!availableUpdateVersion) return;
+    setUpdateStatus('available');
+    setUpdateStatusText(`发现新版本 v${availableUpdateVersion}，可手动下载更新`);
+  }, [availableUpdateVersion]);
 
   const handleSaveSettings = async (updates: Partial<AppSettings>) => {
     const updatedSettings = await storageService.updateSettings(updates);
@@ -231,7 +238,7 @@ interface SettingsProps {
           setUpdateStatusText('正在检查更新...');
           break;
         case 'available':
-          setUpdateStatusText(`发现新版本 v${version}，正在后台下载...`);
+          setUpdateStatusText(`发现新版本 v${version}，可手动下载更新`);
           break;
         case 'latest':
           setUpdateStatusText('当前已是最新版本');
@@ -274,6 +281,18 @@ interface SettingsProps {
         friendlyError = '未检测到线上的正式发布版本';
       }
       setUpdateStatusText(friendlyError);
+    }
+  };
+
+  const handleDownloadUpdate = async () => {
+    if (!window.electronAPI || !window.electronAPI.downloadUpdate) return;
+    setUpdateStatus('downloading');
+    setUpdateStatusText('正在下载更新包...');
+    setDownloadPercent(0);
+    const res = await window.electronAPI.downloadUpdate();
+    if (!res.success) {
+      setUpdateStatus('error');
+      setUpdateStatusText('下载更新失败，请稍后再试');
     }
   };
 
@@ -820,7 +839,7 @@ interface SettingsProps {
                     className="py-1.5 px-4 bg-primary text-white text-xs font-bold rounded-xl flex items-center gap-1.5 hover:opacity-90 active:scale-95 transition-all shadow-md shadow-primary/10 disabled:opacity-50 cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-[16px]">sync</span>
-                    {updateStatus === 'checking' ? '检查中...' : updateStatus === 'downloading' ? '正在下载...' : '立即检查'}
+                    {updateStatus === 'checking' ? '检查中...' : '立即检查'}
                   </button>
                 </div>
 
@@ -841,6 +860,17 @@ interface SettingsProps {
                           style={{ width: `${downloadPercent}%` }}
                         />
                       </div>
+                    )}
+
+                    {updateStatus === 'available' && (
+                      <button
+                        type="button"
+                        onClick={handleDownloadUpdate}
+                        className="w-full py-2 bg-primary hover:opacity-90 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all shadow-md shadow-primary/10 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">download</span>
+                        下载更新包
+                      </button>
                     )}
 
                     {updateStatus === 'downloaded' && (

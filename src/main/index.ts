@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as crypto from 'crypto';
+import { getSubtitleMimeType, getSubtitleTypeFromPath } from '../renderer/services/subtitles';
 
 let mainWindow: BrowserWindow | null = null;
 let streamServer: http.Server | null = null;
@@ -161,6 +162,37 @@ function startStreamServer() {
 
       const cleanBase64 = filePathQuery.replace(/ /g, '+');
       const decodedPath = Buffer.from(cleanBase64, 'base64').toString('utf-8');
+
+      if (urlObj.pathname === '/subtitle') {
+        const subtitleType = getSubtitleTypeFromPath(decodedPath);
+        if (!subtitleType) {
+          res.writeHead(415);
+          res.end('Unsupported subtitle type');
+          return;
+        }
+
+        if (decodedPath.startsWith('http://') || decodedPath.startsWith('https://')) {
+          res.writeHead(400);
+          res.end('Remote subtitles are not supported yet');
+          return;
+        }
+
+        if (!fs.existsSync(decodedPath)) {
+          res.writeHead(404);
+          res.end('Subtitle file not found');
+          return;
+        }
+
+        const stat = fs.statSync(decodedPath);
+        res.writeHead(200, {
+          'Content-Length': stat.size,
+          'Content-Type': getSubtitleMimeType(subtitleType),
+          'Cache-Control': 'no-cache'
+        });
+        fs.createReadStream(decodedPath).pipe(res);
+        return;
+      }
+
       console.log(`[Stream Server] Request URL: ${req.url}`);
       console.log(`[Stream Server] Decoded path: ${decodedPath}`);
       console.log(`[Stream Server] File exists: ${fs.existsSync(decodedPath)}`);
@@ -306,8 +338,8 @@ function scanDirectory(dirPath: string): FileNode[] {
 // 3. 自动更新逻辑
 function setupAutoUpdater() {
   // 配置 autoUpdater
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
   // 检查是否为便携版
   const isPortable = !!process.env.PORTABLE_EXECUTABLE_DIR;
@@ -369,6 +401,21 @@ function setupAutoUpdater() {
     if (isPortable) return false;
     autoUpdater.quitAndInstall();
     return true;
+  });
+
+  ipcMain.handle('update:download', async () => {
+    if (isPortable) {
+      return { success: false, isPortable: true, status: 'portable' };
+    }
+    if (!app.isPackaged) {
+      return { success: false, error: '开发环境跳过更新下载' };
+    }
+    try {
+      await autoUpdater.downloadUpdate();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || err };
+    }
   });
 
   // 启动 5 秒后静默检查更新
@@ -466,6 +513,28 @@ app.whenReady().then(() => {
       return null;
     }
     return filePaths[0];
+  });
+
+  // 选择外部字幕文件
+  ipcMain.handle('dialog:selectSubtitleFile', async () => {
+    if (!mainWindow) return null;
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [
+        { name: '字幕文件', extensions: ['srt', 'vtt', 'ass'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    });
+    if (canceled || filePaths.length === 0) {
+      return null;
+    }
+
+    const selectedPath = filePaths[0];
+    if (!getSubtitleTypeFromPath(selectedPath)) {
+      return null;
+    }
+
+    return selectedPath;
   });
 
   // 扫描文件夹下的视频文件
@@ -637,6 +706,12 @@ app.whenReady().then(() => {
     // 对路径进行 base64 编码，防止中文或特殊字符在 URL 传参时解析出错
     const base64Path = Buffer.from(absolutePath).toString('base64');
     return `http://127.0.0.1:${streamPort}/video?path=${encodeURIComponent(base64Path)}`;
+  });
+
+  // 获取本地字幕文件的 HTTP 访问 URL
+  ipcMain.handle('subtitle:getUrl', (_event, subtitlePath: string) => {
+    const base64Path = Buffer.from(subtitlePath).toString('base64');
+    return `http://127.0.0.1:${streamPort}/subtitle?path=${encodeURIComponent(base64Path)}`;
   });
 
   // 代理 WebDAV 网络请求，以避开渲染进程的 CORS 限制

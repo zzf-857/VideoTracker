@@ -125,6 +125,28 @@ body {
   transform: translateX(-50%) !important; /* 强制水平中心对齐鼠标 X 坐标 */
 }
 
+.custom-subtitle-toolbar-host {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 130;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.art-video-player.art-control-show .custom-subtitle-toolbar-host,
+.art-video-player.art-hover .custom-subtitle-toolbar-host {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.custom-subtitle-toolbar-root {
+  pointer-events: auto;
+}
+
 /* 进度条骨架屏动画 */
 @keyframes skeleton-loading {
   0% {
@@ -187,4 +209,3 @@ body {
   animation: locate-highlight 0.8s ease-in-out 2;
   z-index: 10;
 }
-

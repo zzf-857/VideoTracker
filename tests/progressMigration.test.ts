@@ -98,6 +98,60 @@ test('migrates progress, timeline, and last played video when only the source ro
   assert.equal(result.data.lastPlayedVideo?.path, newPath);
 });
 
+test('migrates external subtitle attachment with progress', () => {
+  const oldPath = 'D:\\Courses\\React\\01-intro.mp4';
+  const newPath = 'E:\\Learning\\React\\01-intro.mp4';
+  const subtitlePath = 'D:\\Courses\\React\\01-intro.srt';
+  const store = makeStore({
+    progress: {
+      [oldPath]: {
+        currentTime: 80,
+        duration: 600,
+        isFinished: false,
+        lastPlayedTime: 1000,
+        size: 1024
+      }
+    },
+    subtitles: {
+      [oldPath]: {
+        path: subtitlePath,
+        name: '01-intro.srt',
+        type: 'srt',
+        offset: -2,
+        encoding: 'utf-8',
+        enabled: true,
+        lastUsedTime: 2000
+      }
+    }
+  });
+
+  const result = migrateProgressForFileTree({
+    data: store,
+    currentSource: localSource('E:\\Learning'),
+    previousSourceRoot: 'D:\\Courses',
+    fileTree: [
+      {
+        name: 'React',
+        path: 'E:\\Learning\\React',
+        isDir: true,
+        children: [
+          {
+            name: '01-intro.mp4',
+            path: newPath,
+            isDir: false,
+            size: 1024
+          }
+        ]
+      }
+    ]
+  });
+
+  assert.equal(result.changed, true);
+  assert.equal(result.data.subtitles?.[newPath]?.path, subtitlePath);
+  assert.equal(result.data.subtitles?.[newPath]?.offset, -2);
+  assert.equal(result.data.subtitles?.[oldPath], undefined);
+});
+
 test('migrates and merges daily logs when progress moves to a new path', () => {
   const oldPath = 'D:\\Courses\\React\\01-intro.mp4';
   const newPath = 'E:\\Learning\\React\\01-intro.mp4';

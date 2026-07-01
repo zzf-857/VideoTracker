@@ -1,6 +1,21 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Artplayer from 'artplayer';
-import { storageService, VideoProgress, getEventHotkeyString } from '../services/storage';
+import { storageService, getEventHotkeyString } from '../services/storage';
+import type { SubtitleAttachment, SubtitleStyleSettings } from '../services/subtitles';
+import {
+  buildSubtitleContainerStyle,
+  buildSubtitleLineStyle,
+  buildArtPlayerSubtitleOption,
+  clampSubtitleOffset,
+  createSubtitleAttachment,
+  DEFAULT_SUBTITLE_STYLE,
+  MAX_SUBTITLE_FONT_SIZE,
+  MIN_SUBTITLE_FONT_SIZE,
+  normalizeSubtitleStyle,
+  stepSubtitleOffset
+} from '../services/subtitles';
+import { Captions, ChevronLeft, ChevronRight, FilePlus2, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 
 interface PlayerProps {
   videoUrl: string; // 播放直链 (可以是本地 HTTP 转接 Url，或 WebDAV 直链)
@@ -23,6 +38,7 @@ interface PlayerProps {
   nextVideoName?: string; // 新增：下一个视频的名字 (用于连播提示)
   pauseOnBlur?: boolean; // 新增：失去焦点自动暂停
   isFinished?: boolean; // 新增：视频当前的已学完状态 (由外部驱动，如手动标记)
+  onSubtitleChange?: () => void;
 }
 
 export default function Player({
@@ -40,7 +56,8 @@ export default function Player({
   sourceId = '',
   nextVideoName,
   pauseOnBlur = true,
-  isFinished = false
+  isFinished = false,
+  onSubtitleChange
 }: PlayerProps) {
   const artRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<Artplayer | null>(null);
@@ -51,6 +68,83 @@ export default function Player({
   const isProgressLoadedRef = useRef<boolean>(false);
   const activeChaptersRef = useRef<any[]>(activeChapters);
   const progressGapUpdaterRef = useRef<(() => void) | null>(null);
+  const subtitleAttachmentRef = useRef<SubtitleAttachment | null>(null);
+  const [isArtReady, setIsArtReady] = useState(false);
+  const [subtitleAttachment, setSubtitleAttachment] = useState<SubtitleAttachment | null>(null);
+  const [subtitleUrl, setSubtitleUrl] = useState('');
+  const [subtitleError, setSubtitleError] = useState('');
+  const [isSubtitleLoading, setIsSubtitleLoading] = useState(false);
+  const [isSubtitleStylePanelOpen, setIsSubtitleStylePanelOpen] = useState(false);
+  const [isSubtitleDragging, setIsSubtitleDragging] = useState(false);
+  const [subtitleToolbarHost, setSubtitleToolbarHost] = useState<HTMLElement | null>(null);
+
+  const formatSubtitleOffset = (offset: number) => {
+    const safeOffset = clampSubtitleOffset(offset);
+    const text = Number.isInteger(safeOffset) ? safeOffset.toFixed(0) : safeOffset.toFixed(1);
+    return `${safeOffset > 0 ? '+' : ''}${text}s`;
+  };
+
+  const applySubtitleStyleToArt = (style?: Partial<SubtitleStyleSettings> | null) => {
+    const art = playerInstanceRef.current;
+    const subtitleElement = art?.template?.$subtitle as HTMLElement | undefined;
+    if (!subtitleElement) return;
+
+    const normalizedStyle = normalizeSubtitleStyle(style);
+    Object.assign(subtitleElement.style, buildSubtitleContainerStyle(normalizedStyle));
+
+    subtitleElement.querySelectorAll<HTMLElement>('.art-subtitle-line').forEach(line => {
+      line.textContent = line.textContent?.trim() || '';
+      Object.assign(line.style, buildSubtitleLineStyle(normalizedStyle));
+    });
+  };
+
+  const persistSubtitleAttachment = async (nextAttachment: SubtitleAttachment, notifyChange = false) => {
+    const normalizedAttachment = {
+      ...nextAttachment,
+      offset: clampSubtitleOffset(nextAttachment.offset || 0),
+      style: normalizeSubtitleStyle(nextAttachment.style)
+    };
+    subtitleAttachmentRef.current = normalizedAttachment;
+    setSubtitleAttachment(normalizedAttachment);
+    applySubtitleStyleToArt(normalizedAttachment.style);
+    await storageService.saveSubtitle(videoPath, normalizedAttachment);
+    if (notifyChange) {
+      onSubtitleChange?.();
+    }
+  };
+
+  const updateSubtitleStyle = (
+    styleUpdates: Partial<SubtitleStyleSettings>,
+    shouldPersist = true
+  ) => {
+    const currentAttachment = subtitleAttachmentRef.current;
+    if (!currentAttachment) return;
+
+    const nextAttachment = {
+      ...currentAttachment,
+      style: normalizeSubtitleStyle({
+        ...currentAttachment.style,
+        ...styleUpdates
+      }),
+      lastUsedTime: Date.now()
+    };
+
+    subtitleAttachmentRef.current = nextAttachment;
+    applySubtitleStyleToArt(nextAttachment.style);
+
+    if (shouldPersist) {
+      setSubtitleAttachment(nextAttachment);
+      void storageService.saveSubtitle(videoPath, nextAttachment);
+    }
+  };
+
+  const resetSubtitleStyle = () => {
+    updateSubtitleStyle(DEFAULT_SUBTITLE_STYLE);
+    const art = playerInstanceRef.current;
+    if (art) {
+      art.notice.show = '字幕样式已重置';
+    }
+  };
 
   useEffect(() => {
     activeChaptersRef.current = activeChapters;
@@ -67,6 +161,8 @@ export default function Player({
     isInitiallyFinishedRef.current = false;
     wasPlayingBeforeBlur.current = false;
     isProgressLoadedRef.current = false;
+    setIsArtReady(false);
+    setSubtitleToolbarHost(null);
 
     let isUnmounting = false;
 
@@ -111,6 +207,64 @@ export default function Player({
     });
 
     playerInstanceRef.current = art;
+    const artPlayerElement = art.template.$player as HTMLElement;
+    const toolbarHost = document.createElement('div');
+    toolbarHost.className = 'custom-subtitle-toolbar-host';
+    artPlayerElement.appendChild(toolbarHost);
+    setSubtitleToolbarHost(toolbarHost);
+
+    const handleSubtitlePointerDown = (event: PointerEvent) => {
+      const currentAttachment = subtitleAttachmentRef.current;
+      if (!currentAttachment || !currentAttachment.enabled || event.button !== 0) return;
+
+      const playerRect = artPlayerElement.getBoundingClientRect();
+      const subtitleElement = art.template.$subtitle as HTMLElement | undefined;
+      if (!playerRect || !subtitleElement) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setIsSubtitleDragging(true);
+
+      try {
+        subtitleElement.setPointerCapture(event.pointerId);
+      } catch (err) {
+        // Some WebViews do not allow pointer capture for detached subtitle nodes.
+      }
+
+      const updatePositionFromPointer = (pointerEvent: PointerEvent, shouldPersist: boolean) => {
+        const x = ((pointerEvent.clientX - playerRect.left) / playerRect.width) * 100;
+        const y = ((pointerEvent.clientY - playerRect.top) / playerRect.height) * 100;
+        updateSubtitleStyle({ positionX: x, positionY: y }, shouldPersist);
+      };
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        moveEvent.preventDefault();
+        updatePositionFromPointer(moveEvent, false);
+      };
+
+      const stopDragging = (upEvent: PointerEvent) => {
+        updatePositionFromPointer(upEvent, true);
+        setIsSubtitleDragging(false);
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', stopDragging);
+        window.removeEventListener('pointercancel', stopDragging);
+
+        try {
+          subtitleElement.releasePointerCapture(event.pointerId);
+        } catch (err) {}
+      };
+
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', stopDragging);
+      window.addEventListener('pointercancel', stopDragging);
+    };
+
+    const subtitleElement = art.template.$subtitle as HTMLElement | undefined;
+    subtitleElement?.addEventListener('pointerdown', handleSubtitlePointerDown);
+
+    art.on('subtitleAfterUpdate', () => {
+      applySubtitleStyleToArt(subtitleAttachmentRef.current?.style);
+    });
 
     // 物理进度条分割线绘制
     const updateProgressGaps = () => {
@@ -421,6 +575,7 @@ export default function Player({
 
         // 标记为已成功从存储中恢复/读取完进度，允许后续写入保存
         isProgressLoadedRef.current = true;
+        setIsArtReady(true);
       });
       updateProgressGaps();
     });
@@ -457,6 +612,20 @@ export default function Player({
       if (art.playbackRate !== playbackSpeed) {
         onSpeedChange(art.playbackRate);
       }
+    });
+
+    art.on('subtitleOffset', (offset: number) => {
+      const currentAttachment = subtitleAttachmentRef.current;
+      if (!currentAttachment) return;
+
+      const nextAttachment = {
+        ...currentAttachment,
+        offset: clampSubtitleOffset(offset),
+        lastUsedTime: Date.now()
+      };
+      subtitleAttachmentRef.current = nextAttachment;
+      setSubtitleAttachment(nextAttachment);
+      storageService.saveSubtitle(videoPath, nextAttachment);
     });
 
     // 实时更新当前播放时长并节流写入
@@ -584,13 +753,135 @@ export default function Player({
       try {
         hiddenVideo.load();
       } catch (e) {}
+
+      subtitleElement?.removeEventListener('pointerdown', handleSubtitlePointerDown);
+      setSubtitleToolbarHost(null);
+      toolbarHost.remove();
       
       if (art) {
         art.destroy(true);
       }
       playerInstanceRef.current = null;
+      setIsArtReady(false);
     };
   }, [videoUrl, videoPath, sourceId, nextVideoName]);
+
+  // 1.1 读取当前视频已保存的外部字幕配置
+  useEffect(() => {
+    let cancelled = false;
+
+    setSubtitleAttachment(null);
+    subtitleAttachmentRef.current = null;
+    setSubtitleUrl('');
+    setSubtitleError('');
+    setIsSubtitleStylePanelOpen(false);
+
+    storageService.loadData().then(async data => {
+      const savedSubtitle = data.subtitles?.[videoPath];
+      if (!savedSubtitle || !savedSubtitle.enabled) return;
+
+      const api = (window as any).electronAPI;
+      if (!api?.getSubtitleUrl) {
+        if (!cancelled) setSubtitleError('当前环境不支持本地字幕');
+        return;
+      }
+
+      try {
+        const url = await api.getSubtitleUrl(savedSubtitle.path);
+        if (cancelled) return;
+
+        const nextAttachment = {
+          ...savedSubtitle,
+          offset: clampSubtitleOffset(savedSubtitle.offset ?? 0),
+          style: normalizeSubtitleStyle(savedSubtitle.style)
+        };
+        subtitleAttachmentRef.current = nextAttachment;
+        setSubtitleAttachment(nextAttachment);
+        setSubtitleUrl(url);
+        if (JSON.stringify(savedSubtitle.style) !== JSON.stringify(nextAttachment.style)) {
+          void storageService.saveSubtitle(videoPath, nextAttachment);
+        }
+      } catch (err) {
+        console.warn('Failed to restore subtitle:', err);
+        if (!cancelled) setSubtitleError('字幕文件读取失败');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [videoPath]);
+
+  // 1.2 将字幕配置应用到 ArtPlayer
+  useEffect(() => {
+    const art = playerInstanceRef.current;
+    if (!isArtReady || !art) return;
+
+    if (!subtitleAttachment || !subtitleUrl || !subtitleAttachment.enabled) {
+      try {
+        art.subtitle.show = false;
+      } catch (err) {
+        console.warn('Failed to hide subtitle:', err);
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    art.subtitle.init(buildArtPlayerSubtitleOption(subtitleAttachment, subtitleUrl)).then(() => {
+      if (cancelled) return;
+      art.subtitle.show = true;
+      art.subtitleOffset = clampSubtitleOffset(subtitleAttachment.offset);
+      applySubtitleStyleToArt(subtitleAttachment.style);
+      setSubtitleError('');
+    }).catch(err => {
+      console.error('Failed to load subtitle:', err);
+      if (!cancelled) {
+        art.subtitle.show = false;
+        subtitleAttachmentRef.current = null;
+        setSubtitleAttachment(null);
+        setSubtitleUrl('');
+        storageService.deleteSubtitle(videoPath).then(() => {
+          onSubtitleChange?.();
+        });
+        setSubtitleError('字幕加载失败');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isArtReady,
+    subtitleUrl,
+    subtitleAttachment?.path,
+    subtitleAttachment?.name,
+    subtitleAttachment?.type,
+    subtitleAttachment?.encoding,
+    subtitleAttachment?.enabled
+  ]);
+
+  // 1.3 字幕偏移变化只更新 offset，不重新加载字幕文件
+  useEffect(() => {
+    const art = playerInstanceRef.current;
+    if (!isArtReady || !art || !subtitleAttachment || !subtitleUrl || !subtitleAttachment.enabled) return;
+    art.subtitleOffset = clampSubtitleOffset(subtitleAttachment.offset || 0);
+  }, [isArtReady, subtitleAttachment?.offset, subtitleAttachment?.enabled, subtitleUrl]);
+
+  // 1.4 字幕样式变化只更新 DOM，不重新加载字幕文件
+  useEffect(() => {
+    if (!isArtReady || !subtitleAttachment || !subtitleAttachment.enabled) return;
+    applySubtitleStyleToArt(subtitleAttachment.style);
+  }, [
+    isArtReady,
+    subtitleAttachment?.enabled,
+    subtitleAttachment?.style?.fontSize,
+    subtitleAttachment?.style?.textColor,
+    subtitleAttachment?.style?.backgroundColor,
+    subtitleAttachment?.style?.backgroundOpacity,
+    subtitleAttachment?.style?.positionX,
+    subtitleAttachment?.style?.positionY
+  ]);
 
   // 2. 同步外部倍速状态变化到播放器
   useEffect(() => {
@@ -711,9 +1002,269 @@ export default function Player({
     };
   }, []);
 
+  const handleSelectSubtitle = async () => {
+    const api = (window as any).electronAPI;
+    if (!api?.selectSubtitleFile || !api?.getSubtitleUrl) {
+      setSubtitleError('当前环境不支持本地字幕');
+      return;
+    }
+
+    setIsSubtitleLoading(true);
+    setSubtitleError('');
+
+    try {
+      const subtitlePath = await api.selectSubtitleFile();
+      if (!subtitlePath) return;
+
+      const nextAttachment = createSubtitleAttachment(subtitlePath);
+      const nextUrl = await api.getSubtitleUrl(subtitlePath);
+
+      setSubtitleUrl(nextUrl);
+      await persistSubtitleAttachment(nextAttachment, true);
+
+      if (playerInstanceRef.current) {
+        playerInstanceRef.current.notice.show = `已加载字幕：${nextAttachment.name}`;
+      }
+    } catch (err) {
+      console.error('Failed to select subtitle:', err);
+      setSubtitleError('字幕选择失败');
+    } finally {
+      setIsSubtitleLoading(false);
+    }
+  };
+
+  const handleClearSubtitle = async () => {
+    subtitleAttachmentRef.current = null;
+    setSubtitleAttachment(null);
+    setSubtitleUrl('');
+    setSubtitleError('');
+    setIsSubtitleStylePanelOpen(false);
+    await storageService.deleteSubtitle(videoPath);
+    onSubtitleChange?.();
+
+    const art = playerInstanceRef.current;
+    if (art) {
+      art.subtitle.show = false;
+      art.notice.show = '已移除字幕';
+    }
+  };
+
+  const handleChangeSubtitleOffset = async (deltaSeconds: number) => {
+    if (!subtitleAttachment) return;
+
+    const nextOffset = stepSubtitleOffset(subtitleAttachment.offset || 0, deltaSeconds);
+    const nextAttachment = {
+      ...subtitleAttachment,
+      offset: nextOffset,
+      lastUsedTime: Date.now()
+    };
+
+    const art = playerInstanceRef.current;
+    if (art) {
+      art.subtitleOffset = nextOffset;
+      art.notice.show = `字幕偏移：${formatSubtitleOffset(nextOffset)}`;
+    }
+
+    await persistSubtitleAttachment(nextAttachment);
+  };
+
+  const handleResetSubtitleOffset = async () => {
+    if (!subtitleAttachment) return;
+
+    const nextAttachment = {
+      ...subtitleAttachment,
+      offset: 0,
+      lastUsedTime: Date.now()
+    };
+
+    const art = playerInstanceRef.current;
+    if (art) {
+      art.subtitleOffset = 0;
+      art.notice.show = '字幕偏移已重置';
+    }
+
+    await persistSubtitleAttachment(nextAttachment);
+  };
+
+  const currentSubtitleStyle = normalizeSubtitleStyle(subtitleAttachment?.style);
+  const textColorOptions = ['#ffffff', '#ffd700', '#00d4ff'];
+  const backgroundColorOptions = ['#000000', '#101820', '#172554', '#7f1d1d'];
+
+  const subtitleToolbar = (
+    <div className="custom-subtitle-toolbar-root relative flex max-w-[calc(100vw-24px)] flex-col items-start gap-2">
+      <div className={`flex max-w-full items-center gap-1 rounded-md border border-white/10 bg-black/55 px-1.5 py-1 text-white shadow-lg backdrop-blur-md ${isSubtitleDragging ? 'ring-2 ring-primary/70' : ''}`}>
+        <button
+          type="button"
+          onClick={handleSelectSubtitle}
+          disabled={isSubtitleLoading}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+          title="选择字幕文件"
+          aria-label="选择字幕文件"
+        >
+          <FilePlus2 size={16} />
+        </button>
+
+        {subtitleAttachment && (
+          <>
+            <div
+              className="hidden max-w-[180px] items-center gap-1.5 truncate px-1 text-xs font-medium text-white/85 sm:flex"
+              title={subtitleAttachment.name}
+            >
+              <Captions size={15} className="shrink-0 text-white/70" />
+              <span className="truncate">{subtitleAttachment.name}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleChangeSubtitleOffset(-1)}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15"
+              title="字幕提前 1 秒"
+              aria-label="字幕提前 1 秒"
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <span
+              className="min-w-10 text-center text-xs font-semibold tabular-nums text-white/85"
+              title="当前字幕偏移"
+            >
+              {formatSubtitleOffset(subtitleAttachment.offset || 0)}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleChangeSubtitleOffset(1)}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15"
+              title="字幕延后 1 秒"
+              aria-label="字幕延后 1 秒"
+            >
+              <ChevronRight size={17} />
+            </button>
+            <button
+              type="button"
+              onClick={handleResetSubtitleOffset}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15"
+              title="重置字幕偏移"
+              aria-label="重置字幕偏移"
+            >
+              <RotateCcw size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSubtitleStylePanelOpen(open => !open)}
+              className={`flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15 ${
+                isSubtitleStylePanelOpen ? 'bg-white/15 text-white' : ''
+              }`}
+              title="字幕样式"
+              aria-label="字幕样式"
+            >
+              <SlidersHorizontal size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={handleClearSubtitle}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15"
+              title="移除字幕"
+              aria-label="移除字幕"
+            >
+              <X size={16} />
+            </button>
+          </>
+        )}
+      </div>
+      {subtitleAttachment && isSubtitleStylePanelOpen && (
+        <div className="w-[270px] rounded-lg border border-white/10 bg-black/75 p-3 text-white shadow-xl backdrop-blur-xl">
+          <div className="space-y-3">
+            <label className="block text-[11px] font-semibold text-white/75">
+              <span className="mb-1 flex items-center justify-between">
+                <span>字号</span>
+                <span className="tabular-nums">{currentSubtitleStyle.fontSize}px</span>
+              </span>
+              <input
+                type="range"
+                min={MIN_SUBTITLE_FONT_SIZE}
+                max={MAX_SUBTITLE_FONT_SIZE}
+                step={1}
+                value={currentSubtitleStyle.fontSize}
+                onChange={event => updateSubtitleStyle({ fontSize: Number(event.target.value) })}
+                className="w-full accent-primary"
+              />
+            </label>
+
+            <label className="block text-[11px] font-semibold text-white/75">
+              <span className="mb-1 flex items-center justify-between">
+                <span>透明度</span>
+                <span className="tabular-nums">{Math.round(currentSubtitleStyle.backgroundOpacity * 100)}%</span>
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={currentSubtitleStyle.backgroundOpacity}
+                onChange={event => updateSubtitleStyle({ backgroundOpacity: Number(event.target.value) })}
+                className="w-full accent-primary"
+              />
+            </label>
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold text-white/75">文字</span>
+              <div className="flex gap-1.5">
+                {textColorOptions.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => updateSubtitleStyle({ textColor: color })}
+                    className={`h-6 w-6 rounded-full border transition ${
+                      currentSubtitleStyle.textColor === color ? 'border-primary ring-2 ring-primary/40' : 'border-white/25'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                    aria-label={`文字颜色 ${color}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold text-white/75">背景</span>
+              <div className="flex gap-1.5">
+                {backgroundColorOptions.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => updateSubtitleStyle({ backgroundColor: color })}
+                    className={`h-6 w-6 rounded-full border transition ${
+                      currentSubtitleStyle.backgroundColor === color ? 'border-primary ring-2 ring-primary/40' : 'border-white/25'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                    aria-label={`背景颜色 ${color}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={resetSubtitleStyle}
+              className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-white/10 text-[11px] font-bold text-white/85 transition hover:bg-white/15"
+            >
+              <RotateCcw size={13} />
+              重置
+            </button>
+          </div>
+        </div>
+      )}
+      {subtitleError && (
+        <div className="max-w-[260px] rounded-md border border-red-400/30 bg-red-950/80 px-3 py-2 text-xs text-red-50 shadow-lg backdrop-blur-md">
+          {subtitleError}
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="w-full h-full rounded-2xl overflow-hidden shadow-lg border border-black/5 bg-[#000000]">
+    <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-lg border border-black/5 bg-[#000000]">
       <div ref={artRef} className="w-full h-full" />
+      {subtitleToolbarHost ? createPortal(subtitleToolbar, subtitleToolbarHost) : null}
     </div>
   );
 }

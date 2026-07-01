@@ -17,6 +17,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 选择本地文件路径（用于更改同步目录等）
   selectFile: () => ipcRenderer.invoke('dialog:selectFile'),
 
+  // 选择本地字幕文件
+  selectSubtitleFile: () => ipcRenderer.invoke('dialog:selectSubtitleFile'),
+
+  // 获取本地字幕文件的 HTTP 访问 URL
+  getSubtitleUrl: (subtitlePath: string) => ipcRenderer.invoke('subtitle:getUrl', subtitlePath),
+
   // 唤起并聚焦主窗口
   focusMainWindow: () => ipcRenderer.invoke('window:focus'),
 
@@ -42,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 自动更新控制
   checkUpdates: () => ipcRenderer.invoke('update:check'),
+  downloadUpdate: () => ipcRenderer.invoke('update:download'),
   quitAndInstall: () => ipcRenderer.invoke('update:quit-and-install'),
   onUpdateMessage: (callback: (data: any) => void) => {
     const listener = (_: any, data: any) => callback(data);

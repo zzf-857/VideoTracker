@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { storageService, MediaSourceConfig, VideoProgress, AppHotkeys, getEventHotkeyString } from '../services/storage';
+import type { SubtitleAttachment } from '../services/subtitles';
 import { WebDAVClient, WebDAVFile } from '../services/webdav';
 import CustomSelect from './CustomSelect';
 import appLogo from '../assets/app.png';
@@ -10,6 +11,7 @@ interface SidebarProps {
   activeVideoPath: string | null;
   onSelectVideo: (url: string, path: string, name: string) => void;
   progressMap: Record<string, VideoProgress>;
+  subtitlesMap?: Record<string, SubtitleAttachment>;
   refreshSignal: number;
   onCollapse: () => void;
   onRefresh?: () => void;
@@ -39,6 +41,7 @@ export default function Sidebar({
   activeVideoPath,
   onSelectVideo,
   progressMap,
+  subtitlesMap = {},
   refreshSignal,
   onCollapse,
   onRefresh,
@@ -564,6 +567,24 @@ export default function Sidebar({
     );
   };
 
+  const hasAvailableSubtitle = (videoPath: string) => {
+    const subtitle = subtitlesMap[videoPath];
+    return Boolean(subtitle?.enabled && subtitle.path);
+  };
+
+  const renderSubtitleBadge = (videoPath: string) => {
+    if (!hasAvailableSubtitle(videoPath)) return null;
+
+    return (
+      <span
+        className="ml-1 inline-flex h-3 items-center rounded-[3px] bg-primary/10 px-1 text-[7px] font-black leading-none tracking-normal text-primary/80"
+        title="已挂载外部字幕"
+      >
+        CC
+      </span>
+    );
+  };
+
   // 递归渲染树形组件
   const renderTreeNodes = (nodes: TreeNode[], depth = 0) => {
     return nodes.map(node => {
@@ -648,8 +669,9 @@ export default function Sidebar({
                 )}
               </div>
               {metaStr && (
-                <div className="text-[9px] text-on-surface-variant/50 font-mono">
-                  {metaStr}
+                <div className="flex items-center text-[9px] text-on-surface-variant/50 font-mono">
+                  <span>{metaStr}</span>
+                  {renderSubtitleBadge(node.path)}
                 </div>
               )}
             </div>
@@ -924,8 +946,9 @@ export default function Sidebar({
                               )}
                             </div>
                             {metaStr && (
-                              <div className="relative z-10 text-[9px] text-on-surface-variant/50 font-mono">
-                                {metaStr}
+                              <div className="relative z-10 flex items-center text-[9px] text-on-surface-variant/50 font-mono">
+                                <span>{metaStr}</span>
+                                {renderSubtitleBadge(video.path)}
                               </div>
                             )}
                           </div>
