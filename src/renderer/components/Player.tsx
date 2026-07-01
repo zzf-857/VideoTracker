@@ -49,6 +49,13 @@ export default function Player({
   const wasPlayingBeforeBlur = useRef<boolean>(false);
   const isInitiallyFinishedRef = useRef<boolean>(false);
   const isProgressLoadedRef = useRef<boolean>(false);
+  const activeChaptersRef = useRef<any[]>(activeChapters);
+  const progressGapUpdaterRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    activeChaptersRef.current = activeChapters;
+    progressGapUpdaterRef.current?.();
+  }, [activeChapters]);
 
   // 1. 初始化和销毁 ArtPlayer
   useEffect(() => {
@@ -64,7 +71,7 @@ export default function Player({
     let isUnmounting = false;
 
     // 格式化 highlight
-    const highlight = activeChapters.map(c => ({
+    const highlight = activeChaptersRef.current.map(c => ({
       time: c.time,
       text: c.text
     }));
@@ -108,9 +115,16 @@ export default function Player({
     // 物理进度条分割线绘制
     const updateProgressGaps = () => {
       const duration = art.duration;
-      if (!duration || duration <= 0 || !activeChapters || activeChapters.length === 0) return;
-      
       let gapContainer = art.template.$progress.querySelector('.custom-progress-gaps') as HTMLElement;
+      const chaptersForGaps = activeChaptersRef.current;
+
+      if (!duration || duration <= 0 || chaptersForGaps.length === 0) {
+        if (gapContainer) {
+          gapContainer.innerHTML = '';
+        }
+        return;
+      }
+
       if (gapContainer) {
         gapContainer.innerHTML = '';
       } else {
@@ -123,7 +137,7 @@ export default function Player({
         art.template.$progress.appendChild(gapContainer);
       }
 
-      activeChapters.forEach(chapter => {
+      chaptersForGaps.forEach(chapter => {
         if (chapter.time <= 0 || chapter.time >= duration) return;
         const pct = (chapter.time / duration) * 100;
         
@@ -135,14 +149,17 @@ export default function Player({
       });
     };
 
+    progressGapUpdaterRef.current = updateProgressGaps;
+
     // 进度条 Hover 缩略图增强
     const progressEl = art.template.$progress;
     const tipEl = art.template.$container.querySelector('.art-progress-tip') as HTMLElement;
 
     const getChapterAtTime = (time: number) => {
-      if (!activeChapters || activeChapters.length === 0) return null;
-      let activeCh = activeChapters[0];
-      for (const ch of activeChapters) {
+      const chaptersForHover = activeChaptersRef.current;
+      if (chaptersForHover.length === 0) return null;
+      let activeCh = chaptersForHover[0];
+      for (const ch of chaptersForHover) {
         if (time >= ch.time) {
           activeCh = ch;
         } else {
@@ -559,6 +576,9 @@ export default function Player({
       if (debounceTimer) {
         clearTimeout(debounceTimer);
       }
+      if (progressGapUpdaterRef.current === updateProgressGaps) {
+        progressGapUpdaterRef.current = null;
+      }
       hiddenVideo.removeEventListener('seeked', handleHiddenVideoSeeked);
       hiddenVideo.src = '';
       try {
@@ -570,7 +590,7 @@ export default function Player({
       }
       playerInstanceRef.current = null;
     };
-  }, [videoUrl, videoPath, activeChapters, sourceId, nextVideoName]);
+  }, [videoUrl, videoPath, sourceId, nextVideoName]);
 
   // 2. 同步外部倍速状态变化到播放器
   useEffect(() => {

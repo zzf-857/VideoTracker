@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { storageService, MediaSourceConfig } from '../services/storage';
+import { calculateLocalDurationPlan } from '../services/planningStats';
 import CustomSelect from './CustomSelect';
 
 interface DashboardProps {
@@ -8,6 +9,7 @@ interface DashboardProps {
   playedVideoCount: number; // 已看完的集数
   totalLocalDuration: number; // 本地视频总时长（秒）
   playedLocalDuration: number; // 本地已看完视频总时长（秒）
+  watchedLocalDuration: number; // 本地已观看进度总时长（秒）
   refreshSignal: number;
   playbackSpeed: number;
   onSpeedChange: (speed: number) => void;
@@ -19,6 +21,7 @@ export default function Dashboard({
   playedVideoCount,
   totalLocalDuration,
   playedLocalDuration,
+  watchedLocalDuration,
   refreshSignal,
   playbackSpeed,
   onSpeedChange
@@ -62,9 +65,6 @@ export default function Dashboard({
   // 计算进度百分比
   const progressPercent = videoCount > 0 ? Math.round((playedVideoCount / videoCount) * 100) : 0;
 
-  // 格式化时长为小时
-  const totalHours = Math.round((totalLocalDuration / 3600) * 10) / 10;
-
   // 格式化时长为 xx小时xx分钟
   const formatDurationToHoursMinutes = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -72,11 +72,13 @@ export default function Dashboard({
     return `${hours}小时${minutes}分钟`;
   };
 
-  // 1. 本地源：根据总时长 and 倍速计算预计天数
-  // 天数 = (总时长 / 倍速) / 每日小时数
-  const estimatedDaysByDuration = dailyHours > 0 
-    ? Math.ceil((totalHours / speed) / dailyHours) 
-    : 0;
+  // 1. 本地源：同时展示按当前进度剩余时间、完整从头时间
+  const localDurationPlan = calculateLocalDurationPlan({
+    totalDuration: totalLocalDuration,
+    watchedDuration: watchedLocalDuration,
+    playbackSpeed: speed,
+    dailyHours
+  });
 
   // 2. 远端源：根据总课时 and 每日集数计算预计天数
   // 天数 = 未看完的视频数 / 每日集数
@@ -101,7 +103,7 @@ export default function Dashboard({
           {statViewMode === 'count' ? (
             `共 ${videoCount} 课时 · 已学完 ${playedVideoCount} 课时`
           ) : (
-            `共 ${formatDurationToHoursMinutes(totalLocalDuration)} · 已学完 ${formatDurationToHoursMinutes(playedLocalDuration)}`
+            `共 ${formatDurationToHoursMinutes(totalLocalDuration)} · 已学习 ${formatDurationToHoursMinutes(watchedLocalDuration)} · 剩余时长 ${formatDurationToHoursMinutes(localDurationPlan.remainingDuration)}`
           )}
         </span>
       </div>
@@ -217,13 +219,18 @@ export default function Dashboard({
         {/* 预计看毕 */}
         <div className="flex flex-col min-w-[100px]">
           <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
-            {currentSource?.type === 'local' ? '预计看毕 (倍速后)' : '预计需要'}
+            {currentSource?.type === 'local' ? '预计学完 (当前进度)' : '预计需要'}
           </span>
           <span className="font-headline font-extrabold text-xl text-primary mt-0.5">
             {currentSource?.type === 'local' 
-              ? `${estimatedDaysByDuration} 天` 
+              ? `${localDurationPlan.remainingDays} 天` 
               : `${estimatedDaysByEpisodes} 天`}
           </span>
+          {currentSource?.type === 'local' && (
+            <span className="text-[9px] text-on-surface-variant font-semibold mt-0.5 whitespace-nowrap">
+              完整从头 {localDurationPlan.fullDays} 天
+            </span>
+          )}
         </div>
 
         {/* 整体进度 */}

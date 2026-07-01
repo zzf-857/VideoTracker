@@ -3,6 +3,7 @@ import { storageService, AppDataStore, MediaSourceConfig } from '../services/sto
 import { useTimer } from './useTimer';
 import { WebDAVClient } from '../services/webdav';
 import { migrateProgressForFileTree } from '../services/progressMigration';
+import { calculateSourceStats } from '../services/planningStats';
 
 export interface TreeNode {
   name: string;
@@ -532,45 +533,16 @@ export function useAppData() {
     };
   }, [fileTree, appData?.progress, currentSource, failedPaths]);
 
-  // 获取该挂载源下所有的视频统计信息（计算课时数和已学完数）
+  // 获取该挂载源下所有的视频统计信息（计算课时数、已学完数与已观看进度）
   const getSourceStats = () => {
-    if (!appData || !currentSource) return { totalCount: 0, finishedCount: 0, totalDuration: 0, finishedDuration: 0 };
-
-    const getFlatVideos = (nodes: TreeNode[]): TreeNode[] => {
-      let res: TreeNode[] = [];
-      for (const n of nodes) {
-        if (n.isDir) {
-          if (n.children) {
-            res = res.concat(getFlatVideos(n.children));
-          }
-        } else {
-          res.push(n);
-        }
-      }
-      return res;
-    };
-
-    const flatVideos = getFlatVideos(fileTree);
-    const totalCount = flatVideos.length;
-    let finishedCount = 0;
-    let totalDuration = 0;
-    let finishedDuration = 0;
-
-    for (const video of flatVideos) {
-      const prog = appData.progress[video.path];
-      if (prog) {
-        const videoDur = prog.duration > 0 ? prog.duration : 1800;
-        totalDuration += videoDur;
-        if (prog.isFinished) {
-          finishedCount++;
-          finishedDuration += videoDur;
-        }
-      } else {
-        totalDuration += 1800; // 未播视频估算 30 分钟
-      }
+    if (!appData || !currentSource) {
+      return { totalCount: 0, finishedCount: 0, totalDuration: 0, finishedDuration: 0, watchedDuration: 0 };
     }
 
-    return { totalCount, finishedCount, totalDuration, finishedDuration };
+    return calculateSourceStats({
+      data: appData,
+      fileTree
+    });
   };
 
   const stats = getSourceStats();

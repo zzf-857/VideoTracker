@@ -351,6 +351,7 @@ export default function App() {
               playedVideoCount={stats.finishedCount}
               totalLocalDuration={stats.totalDuration}
               playedLocalDuration={stats.finishedDuration}
+              watchedLocalDuration={stats.watchedDuration}
               refreshSignal={refreshSignal}
               playbackSpeed={playbackSpeed}
               onSpeedChange={handleSpeedChange}
