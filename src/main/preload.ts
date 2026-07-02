@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // 读写本地 JSON 配置文件
   saveData: (key: string, data: any) => ipcRenderer.invoke('db:save', key, data),
+  replaceData: (key: string, data: any) => ipcRenderer.invoke('db:replace', key, data),
   getData: (key: string) => ipcRenderer.invoke('db:get', key),
   
   // 获取本地视频转接 HTTP 流的播放 URL

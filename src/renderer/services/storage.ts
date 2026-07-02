@@ -185,6 +185,29 @@ class StorageService {
     }
   }
 
+  async replaceData(data: AppDataStore): Promise<boolean> {
+    if (isElectron) {
+      const success = await (window as any).electronAPI.replaceData('app_data', data);
+      if (success) {
+        this.cache = data;
+      }
+      return success;
+    } else {
+      localStorage.setItem('videotracker_app_data', JSON.stringify(data));
+      this.cache = data;
+      return true;
+    }
+  }
+
+  async replaceLocalBackup(key: string, data: AppDataStore): Promise<boolean> {
+    if (isElectron) {
+      return await (window as any).electronAPI.replaceData(key, data);
+    } else {
+      localStorage.setItem(`videotracker_${key}`, JSON.stringify(data));
+      return true;
+    }
+  }
+
   // 快捷方法：保存视频时间轴文本
   async saveTimeline(videoPath: string, text: string): Promise<void> {
     const data = await this.loadData();

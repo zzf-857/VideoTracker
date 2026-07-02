@@ -35,6 +35,15 @@ const getDataFilePath = (key: string) => {
   return path.join(baseDir, `${key}.json`);
 };
 
+const writeJsonFileAtomically = (filePath: string, data: any) => {
+  const dirPath = path.dirname(filePath);
+  fs.mkdirSync(dirPath, { recursive: true });
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+
+  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
+  fs.renameSync(tempPath, filePath);
+};
+
 // 辅助函数：代理流式 HTTP 请求并自动跟踪 301/302 重定向（避开 Referer 和 CORS 限制）
 function makeProxyRequest(
   targetUrlStr: string,
@@ -577,10 +586,22 @@ app.whenReady().then(() => {
   ipcMain.handle('db:save', async (_event, key: string, data: any) => {
     try {
       const filePath = getDataFilePath(key);
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+      writeJsonFileAtomically(filePath, data);
       return true;
     } catch (err) {
       console.error(`Error saving data for key ${key}:`, err);
+      return false;
+    }
+  });
+
+  // 原子替换持久化数据，用于本地安全快照和云端恢复覆盖
+  ipcMain.handle('db:replace', async (_event, key: string, data: any) => {
+    try {
+      const filePath = getDataFilePath(key);
+      writeJsonFileAtomically(filePath, data);
+      return true;
+    } catch (err) {
+      console.error(`Error replacing data for key ${key}:`, err);
       return false;
     }
   });

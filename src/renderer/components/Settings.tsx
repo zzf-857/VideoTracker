@@ -32,6 +32,7 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
   });
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle');
   const [syncMsg, setSyncMsg] = useState('');
+  const [syncAction, setSyncAction] = useState<'upload' | 'restore' | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
 
   // 表单状态
@@ -39,7 +40,6 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
   const [webdavUser, setWebdavUser] = useState('');
   const [webdavPassword, setWebdavPassword] = useState('');
   const [idleTimeout, setIdleTimeout] = useState(15);
-  const [autoSync, setAutoSync] = useState(false);
   const [pauseOnBlur, setPauseOnBlur] = useState(true);
   const [autoPlayNext, setAutoPlayNext] = useState(false);
 
@@ -63,7 +63,6 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
     storageService.loadData().then(data => {
       setSettings(data.settings);
       setIdleTimeout(data.settings.idleTimeout || 15);
-      setAutoSync(data.settings.autoSync || false);
       setPauseOnBlur(data.settings.pauseOnBlur ?? true);
       setAutoPlayNext(data.settings.autoPlayNext ?? false);
       setWebdavUrl(data.settings.webdavSyncUrl || '');
@@ -112,14 +111,13 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
     setWebdavUrl('');
     setWebdavUser('');
     setWebdavPassword('');
-    setAutoSync(false);
 
     await handleSaveSettings({
       webdavSyncUrl: undefined,
       webdavUser: undefined,
       webdavPassword: undefined,
       autoSync: false
-    }, '已清空 WebDAV 同步配置');
+    }, '已清空 WebDAV 备份配置');
   };
 
   const handleResetLearningSettings = async () => {
@@ -376,12 +374,10 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
       window.removeEventListener('keydown', handleGlobalKeyDown, true);
     };
   }, [activeHotkeyKey, settings]);
-  // 手动执行 WebDAV 同步
-  const handleSync = async () => {
-    // 先保存当前的 WebDAV 配置
+  const saveCurrentWebdavSettings = async () => {
     const currentSettings: Partial<AppSettings> = {
       idleTimeout,
-      autoSync,
+      autoSync: false,
       pauseOnBlur,
       autoPlayNext,
       webdavSyncUrl: webdavUrl,
@@ -389,21 +385,57 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
       webdavPassword,
       hotkeys: settings.hotkeys
     };
-    
-    await storageService.updateSettings(currentSettings);
-    setSyncStatus('syncing');
-    setSyncMsg('正在与 WebDAV 同步进度数据...');
 
-    const result = await syncService.sync();
-    
+    const updatedSettings = await storageService.updateSettings(currentSettings);
+    setSettings(updatedSettings);
+    onRefresh();
+  };
+
+  const handleUploadBackup = async () => {
+    const confirmed = window.confirm(
+      '将使用本机当前数据覆盖 WebDAV 主备份。适合在本机记录清理完成后重新上传备份。是否继续？'
+    );
+    if (!confirmed) return;
+
+    await saveCurrentWebdavSettings();
+    setSyncStatus('syncing');
+    setSyncAction('upload');
+    setSyncMsg('正在上传本机备份到 WebDAV...');
+
+    const result = await syncService.uploadLocalBackup();
     if (result.success) {
       setSyncStatus('success');
       setSyncMsg(result.message);
-      onRefresh(); // 刷新本地缓存与日历
     } else {
       setSyncStatus('failed');
       setSyncMsg(result.message);
     }
+    setSyncAction(null);
+    showToast(result.message);
+  };
+
+  const handleRestoreBackup = async () => {
+    const confirmed = window.confirm(
+      '将从 WebDAV 主备份覆盖本机数据。程序会先替换保存一份本机恢复前快照，然后再覆盖本地。该操作会改变本机播放记录、学习日志、时间轴笔记和字幕配置。是否继续？'
+    );
+    if (!confirmed) return;
+
+    await saveCurrentWebdavSettings();
+    setSyncStatus('syncing');
+    setSyncAction('restore');
+    setSyncMsg('正在从 WebDAV 恢复到本机...');
+
+    const result = await syncService.restoreFromRemoteBackup();
+    if (result.success) {
+      storageService.clearCache();
+      setSyncStatus('success');
+      setSyncMsg(result.message);
+      onRefresh();
+    } else {
+      setSyncStatus('failed');
+      setSyncMsg(result.message);
+    }
+    setSyncAction(null);
     showToast(result.message);
   };
 
@@ -421,7 +453,7 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
         <div>
           <h2 className="text-2xl font-headline font-extrabold text-on-surface tracking-tight">系统设置</h2>
           <p className="text-sm text-on-surface-variant mt-1">
-            个性化您的学习体验，配置 WebDAV 实现多端数据自动同步
+            个性化您的学习体验，配置 WebDAV 备份与恢复
           </p>
         </div>
       </header>
@@ -434,8 +466,8 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
           <section className="apple-card rounded-2xl p-6 bg-white/80 transition-all hover:shadow-md">
             <div className="flex justify-between items-start gap-4 mb-6 flex-wrap">
               <div>
-                <h3 className="font-bold text-base text-on-surface">WebDAV 云端同步</h3>
-                <p className="text-xs text-on-surface-variant mt-0.5">将播放进度、学习时长与历史记录同步至个人云盘，实现多端同步</p>
+                <h3 className="font-bold text-base text-on-surface">WebDAV 数据备份</h3>
+                <p className="text-xs text-on-surface-variant mt-0.5">手动上传本机备份，或从 WebDAV 主备份恢复到本机</p>
               </div>
               <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                 <span className={`px-2.5 py-0.5 font-bold text-[10px] rounded-full border ${
@@ -449,17 +481,17 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
                   type="button"
                   onClick={handleResetWebdavSettings}
                   className="py-1 px-2.5 bg-black/[0.04] hover:bg-black/[0.08] active:scale-95 text-on-surface text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                  title="仅清空 WebDAV 地址、账号与自动同步开关"
+                  title="仅清空 WebDAV 地址、账号与备份配置"
                 >
                   <span className="material-symbols-outlined text-[13px]">restart_alt</span>
-                  重置同步
+                  重置配置
                 </button>
               </div>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1">WebDAV 同步文件夹地址</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1">WebDAV 备份文件夹地址</label>
                 <input
                   type="url"
                   placeholder="https://dav.jianguoyun.com/dav/VideoTracker"
@@ -472,7 +504,7 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1">同步用户名</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1">账号用户名</label>
                   <input
                     type="text"
                     placeholder="用户名"
@@ -495,35 +527,43 @@ export default function Settings({ refreshSignal, onRefresh, availableUpdateVers
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-black/5">
-                <div>
-                  <p className="font-semibold text-sm text-on-surface">退出时自动同步</p>
-                  <p className="text-[11px] text-on-surface-variant">每次关闭软件时自动与云端合并备份</p>
+              <div className="pt-4 border-t border-black/5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={handleUploadBackup}
+                    disabled={syncStatus === 'syncing'}
+                    className="py-2.5 px-4 bg-primary text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 hover:opacity-90 active:scale-95 transition-all shadow-md shadow-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="用本机当前数据覆盖 WebDAV 主备份"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">cloud_upload</span>
+                    {syncAction === 'upload' ? '上传中...' : '上传本机备份'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRestoreBackup}
+                    disabled={syncStatus === 'syncing'}
+                    className="py-2.5 px-4 bg-black/[0.04] text-on-surface hover:bg-black/[0.08] active:scale-95 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="先保存本机恢复前快照，再用 WebDAV 主备份覆盖本地"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">cloud_download</span>
+                    {syncAction === 'restore' ? '恢复中...' : '从云端恢复'}
+                  </button>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autoSync}
-                    onChange={(e) => {
-                      setAutoSync(e.target.checked);
-                      handleSaveSettings({ autoSync: e.target.checked });
-                    }}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-[#E9E9EA] rounded-full peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full shadow-sm" />
-                </label>
+                <p className="text-[10px] text-on-surface-variant/80 mt-2 leading-relaxed">
+                  上传会覆盖 WebDAV 主备份；恢复会先替换保存本机恢复前快照，再用 WebDAV 主备份覆盖本地。
+                </p>
               </div>
 
-              <div className="pt-2">
-                <button
-                  onClick={handleSync}
-                  disabled={syncStatus === 'syncing'}
-                  className="py-2 px-4 bg-primary text-white text-xs font-bold rounded-xl flex items-center gap-1.5 hover:opacity-90 active:scale-95 transition-all shadow-md shadow-primary/10"
-                >
-                  <span className="material-symbols-outlined text-[16px]">sync</span>
-                  {syncStatus === 'syncing' ? '同步中...' : '立即与云端同步'}
-                </button>
-              </div>
+              {syncStatus !== 'idle' && (
+                <div className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                  syncStatus === 'failed'
+                    ? 'bg-red-500/5 border-red-500/15 text-red-600'
+                    : 'bg-primary/5 border-primary/10 text-primary'
+                }`}>
+                  {syncMsg}
+                </div>
+              )}
             </div>
           </section>
 

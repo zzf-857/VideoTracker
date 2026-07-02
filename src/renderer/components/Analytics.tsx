@@ -7,6 +7,44 @@ interface AnalyticsProps {
   onRefresh: () => void;
 }
 
+interface OverviewStar {
+  left: string;
+  top: string;
+  size: number;
+  color: string;
+  opacity: number;
+  rotate: string;
+  delay: string;
+}
+
+const STAR_COLORS = ['#FFFFFF', '#FFF7C2', '#FFE082', '#FBC02D', '#0071E3'];
+const STAR_FIELDS = [
+  { count: 5, x: [3, 28], y: [8, 86], size: [5, 11], opacity: [0.2, 0.5] },
+  { count: 9, x: [30, 66], y: [8, 86], size: [5, 15], opacity: [0.18, 0.58] },
+  { count: 8, x: [68, 98], y: [6, 90], size: [6, 16], opacity: [0.28, 0.78] }
+];
+
+const randomBetween = (min: number, max: number) => min + Math.random() * (max - min);
+
+const createOverviewStars = (): OverviewStar[] => {
+  return STAR_FIELDS.flatMap(field => (
+    Array.from({ length: field.count }, () => {
+      const size = Math.round(randomBetween(field.size[0], field.size[1]));
+      return {
+        left: `${randomBetween(field.x[0], field.x[1]).toFixed(1)}%`,
+        top: `${randomBetween(field.y[0], field.y[1]).toFixed(1)}%`,
+        size,
+        color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
+        opacity: Number(randomBetween(field.opacity[0], field.opacity[1]).toFixed(2)),
+        rotate: `${Math.round(randomBetween(-80, 80))}deg`,
+        delay: `${randomBetween(0, 1.8).toFixed(2)}s`
+      };
+    })
+  ));
+};
+
+const OVERVIEW_STARS = createOverviewStars();
+
 export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) {
   const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLog>>({});
   const [weeklyDuration, setWeeklyDuration] = useState<number[]>(new Array(7).fill(0)); // 周一到周日学习秒数
@@ -379,9 +417,9 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5 overflow-x-auto pb-2 custom-scrollbar">
+          <div className="flex flex-col gap-1.5 overflow-x-auto pt-2 pb-2 custom-scrollbar">
             {/* 网格区：宽度 w-full 保持铺满，每一列 flex-1 撑满，格子 w-full 自适应正方形大小，且带有时光聚光灯高亮动效 */}
-            <div className={`flex ${heatmapConfig.containerGapClass} w-full min-w-[640px] pb-1`}>
+            <div className={`flex ${heatmapConfig.containerGapClass} w-full min-w-[640px] pt-1 pb-1`}>
               {columns.map((column, colIdx) => (
                 <div 
                   key={colIdx} 
@@ -472,7 +510,29 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
             </section>
 
             {/* 数据概览卡片 - 移除 apple-card 防止背景颜色被 rgba(255,255,255,0.8) 覆盖 */}
-            <section className="p-6 rounded-2xl bg-[#1D1D1F] text-white relative group border border-black/5 shadow-sm shadow-black/10 flex flex-row items-center justify-between gap-6 min-h-[160px]">
+            <section className="p-6 rounded-2xl bg-[#1D1D1F] text-white relative group border border-black/5 shadow-sm shadow-black/10 flex flex-row items-center justify-between gap-6 min-h-[168px]">
+              <div className="absolute inset-0 pointer-events-none z-0">
+                {OVERVIEW_STARS.map((star, idx) => (
+                  <svg
+                    key={idx}
+                    className="absolute animate-pulse"
+                    style={{
+                      left: star.left,
+                      top: star.top,
+                      width: star.size,
+                      height: star.size,
+                      color: star.color,
+                      opacity: star.opacity,
+                      animationDelay: star.delay,
+                      transform: `rotate(${star.rotate})`
+                    }}
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                ))}
+              </div>
               <div className="relative z-10 flex-1 flex flex-col justify-between h-full gap-4">
                 <div>
                   <span className="text-white/50 font-bold text-xs uppercase tracking-wider">总览看板</span>
@@ -507,11 +567,11 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
               </div>
               
               {/* 用于在 flex 布局中占位的相对定位容器 */}
-              <div className="relative w-[180px] h-[150px] shrink-0 select-none">
+              <div className="relative z-10 w-[210px] h-[156px] shrink-0 select-none">
                 {/* 绝对定位的破界/溢出容器 */}
-                <div className="absolute -right-4 -bottom-8 w-[210px] h-[180px] overflow-visible flex items-center justify-center">
+                <div className="absolute -right-6 -bottom-10 w-[250px] h-[210px] overflow-visible flex items-center justify-center">
                   {/* 奖杯发光背景 */}
-                  <div className="absolute w-32 h-32 rounded-full bg-primary/20 blur-2xl group-hover:bg-primary/30 transition-all duration-500 animate-pulse pointer-events-none" />
+                  <div className="absolute w-40 h-40 rounded-full bg-primary/20 blur-2xl group-hover:bg-primary/30 transition-all duration-500 animate-pulse pointer-events-none" />
                   
                   {/* 星星装饰背景（不旋转，保持水平闪烁） */}
                   <div className="absolute inset-0 pointer-events-none z-0">
@@ -530,7 +590,7 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                   </div>
 
                   {/* 奖杯本体：大尺寸，浮动，向右倾斜15度，hover时放大10%并旋转到20度 */}
-                  <div className="w-[180px] h-[180px] animate-float transform rotate-[15deg] group-hover:rotate-[20deg] group-hover:scale-110 transition-all duration-500 relative z-10 flex items-center justify-center">
+                  <div className="w-[220px] h-[220px] animate-float transform rotate-[15deg] group-hover:rotate-[20deg] group-hover:scale-110 transition-all duration-500 relative z-10 flex items-center justify-center">
                     <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-[0_12px_24px_rgba(255,179,0,0.45)]">
                       <defs>
                         {/* 金色渐变：纯粹以金色为主 */}
