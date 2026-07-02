@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as crypto from 'crypto';
 import { getSubtitleMimeType, getSubtitleTypeFromPath, pickAutoMatchedSubtitle } from '../renderer/services/subtitles';
+import { resetStoragePathToDefault } from './storagePaths';
 
 let mainWindow: BrowserWindow | null = null;
 let streamServer: http.Server | null = null;
@@ -638,14 +639,13 @@ app.whenReady().then(() => {
   });
 
   // 重置数据存储路径
-  ipcMain.handle('db:resetStoragePath', async () => {
+  ipcMain.handle('db:resetStoragePath', async (_event, options?: { moveData?: boolean }) => {
     try {
       const defaultPath = app.getPath('userData');
-      const configPathFile = path.join(defaultPath, 'path_config.json');
-      if (fs.existsSync(configPathFile)) {
-        fs.unlinkSync(configPathFile);
-      }
-      return { success: true, defaultPath };
+      const currentPath = getStorageDirectory();
+      return resetStoragePathToDefault(defaultPath, currentPath, {
+        moveData: options?.moveData !== false
+      });
     } catch (err: any) {
       console.error('Reset storage path error:', err);
       return { success: false, error: err.message || '重置失败' };

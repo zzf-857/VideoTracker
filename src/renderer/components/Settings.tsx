@@ -6,18 +6,29 @@ interface SettingsProps {
   refreshSignal: number;
   onRefresh: () => void;
   availableUpdateVersion?: string | null;
-}export default function Settings({ refreshSignal, onRefresh, availableUpdateVersion }: SettingsProps) {
+}
+
+const DEFAULT_HOTKEYS: AppSettings['hotkeys'] = {
+  fullscreen: 'f',
+  speedUp: 'c',
+  speedDown: 'x',
+  speedReset: 'z',
+  search: 'ctrl+f'
+};
+
+const DEFAULT_LEARNING_SETTINGS = {
+  idleTimeout: 15,
+  pauseOnBlur: true,
+  autoPlayNext: false
+};
+
+export default function Settings({ refreshSignal, onRefresh, availableUpdateVersion }: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>({
-    idleTimeout: 15,
+    idleTimeout: DEFAULT_LEARNING_SETTINGS.idleTimeout,
     autoSync: false,
-    hotkeys: {
-      fullscreen: 'f',
-      speedUp: 'c',
-      speedDown: 'x',
-      speedReset: 'z',
-      search: 'ctrl+f'
-    },
-    pauseOnBlur: true
+    hotkeys: DEFAULT_HOTKEYS,
+    pauseOnBlur: DEFAULT_LEARNING_SETTINGS.pauseOnBlur,
+    autoPlayNext: DEFAULT_LEARNING_SETTINGS.autoPlayNext
   });
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle');
   const [syncMsg, setSyncMsg] = useState('');
@@ -90,65 +101,78 @@ interface SettingsProps {
     setUpdateStatusText(`发现新版本 v${availableUpdateVersion}，可手动下载更新`);
   }, [availableUpdateVersion]);
 
-  const handleSaveSettings = async (updates: Partial<AppSettings>) => {
+  const handleSaveSettings = async (updates: Partial<AppSettings>, toastMessage = '设置已自动保存') => {
     const updatedSettings = await storageService.updateSettings(updates);
     setSettings(updatedSettings);
     onRefresh();
-    showToast('设置已自动保存');
+    showToast(toastMessage);
   };
 
-  const handleResetToDefaults = async () => {
-    const defaultSettings: AppSettings = {
-      idleTimeout: 15,
-      autoSync: false,
-      hotkeys: {
-        fullscreen: 'f',
-        speedUp: 'c',
-        speedDown: 'x',
-        speedReset: 'z',
-        search: 'ctrl+f'
-      },
-      pauseOnBlur: true,
-      autoPlayNext: false,
-      dailyHours: 1.5,
-      dailyEpisodes: 3,
-      playbackSpeed: 1.25,
-      isSidebarCollapsed: false,
-      viewMode: 'tree',
-      sortBy: 'name',
-      sortOrder: 'asc',
-      expandedPaths: {}
-    };
-    setIdleTimeout(15);
-    setAutoSync(false);
-    setPauseOnBlur(true);
-    setAutoPlayNext(false);
+  const handleResetWebdavSettings = async () => {
     setWebdavUrl('');
     setWebdavUser('');
     setWebdavPassword('');
-    
-    setSettings(defaultSettings);
-    await storageService.updateSettings(defaultSettings);
+    setAutoSync(false);
 
-    // 一键重置数据路径
-    if (window.electronAPI && window.electronAPI.resetStoragePath) {
-      try {
-        const res = await window.electronAPI.resetStoragePath();
-        if (res && res.success) {
-          setStoragePath(res.defaultPath);
-          setNewSelectedPath('');
-          if (window.electronAPI.getStorageSize) {
-            const size = await window.electronAPI.getStorageSize();
-            setStorageSize(size);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to reset storage path:', err);
-      }
+    await handleSaveSettings({
+      webdavSyncUrl: undefined,
+      webdavUser: undefined,
+      webdavPassword: undefined,
+      autoSync: false
+    }, '已清空 WebDAV 同步配置');
+  };
+
+  const handleResetLearningSettings = async () => {
+    setIdleTimeout(DEFAULT_LEARNING_SETTINGS.idleTimeout);
+    setPauseOnBlur(DEFAULT_LEARNING_SETTINGS.pauseOnBlur);
+    setAutoPlayNext(DEFAULT_LEARNING_SETTINGS.autoPlayNext);
+
+    await handleSaveSettings(DEFAULT_LEARNING_SETTINGS, '已重置学习偏好');
+  };
+
+  const handleResetHotkeys = async () => {
+    setActiveHotkeyKey(null);
+    await handleSaveSettings({ hotkeys: DEFAULT_HOTKEYS }, '已重置快捷键');
+  };
+
+  const handleResetStoragePathToDefault = async () => {
+    if (!window.electronAPI || !window.electronAPI.resetStoragePath) {
+      alert('该功能仅在桌面端可用');
+      return;
     }
 
-    onRefresh();
-    showToast('已重置为默认设置');
+    if (defaultAppPath && storagePath === defaultAppPath) {
+      showToast('当前已经是默认数据路径');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      '将把当前数据目录中的学习数据迁移回默认 AppData 目录，并切换为默认数据路径。该操作不会清空播放记录。是否继续？'
+    );
+    if (!confirmed) return;
+
+    setIsMigrating(true);
+    try {
+      const res = await window.electronAPI.resetStoragePath(true);
+      if (res && res.success) {
+        storageService.clearCache();
+        setStoragePath(res.defaultPath);
+        setNewSelectedPath('');
+        if (window.electronAPI.getStorageSize) {
+          const size = await window.electronAPI.getStorageSize();
+          setStorageSize(size);
+        }
+        onRefresh();
+        showToast(`已迁回默认路径，保留 ${res.movedFiles?.length ?? 0} 个数据文件`);
+      } else {
+        alert(res?.error || '恢复默认路径失败');
+      }
+    } catch (err: any) {
+      console.error('Failed to reset storage path:', err);
+      alert('发生错误：' + (err.message || err));
+    } finally {
+      setIsMigrating(false);
+    }
   };
 
   const handleChangeStoragePath = async () => {
@@ -196,6 +220,7 @@ interface SettingsProps {
     try {
       const res = await window.electronAPI.migrateStorage(newSelectedPath, true);
       if (res && res.success) {
+        storageService.clearCache();
         setStoragePath(res.newPath);
         setNewSelectedPath('');
         showToast('数据一键迁移成功并切换路径');
@@ -399,14 +424,6 @@ interface SettingsProps {
             个性化您的学习体验，配置 WebDAV 实现多端数据自动同步
           </p>
         </div>
-        
-        <button
-          onClick={handleResetToDefaults}
-          className="py-1.5 px-3 border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 active:scale-95 text-red-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-        >
-          <span className="material-symbols-outlined text-[16px]">restart_alt</span>
-          一键重置
-        </button>
       </header>
 
       {/* 使用双列自适应布局，充分利用右侧显示空间 */}
@@ -415,18 +432,29 @@ interface SettingsProps {
         <div className="space-y-6">
           {/* 1. 云端同步配置 */}
           <section className="apple-card rounded-2xl p-6 bg-white/80 transition-all hover:shadow-md">
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex justify-between items-start gap-4 mb-6 flex-wrap">
               <div>
                 <h3 className="font-bold text-base text-on-surface">WebDAV 云端同步</h3>
                 <p className="text-xs text-on-surface-variant mt-0.5">将播放进度、学习时长与历史记录同步至个人云盘，实现多端同步</p>
               </div>
-              <span className={`px-2.5 py-0.5 font-bold text-[10px] rounded-full border ${
-                webdavUrl 
-                  ? 'bg-green-50 text-green-600 border-green-100' 
-                  : 'bg-orange-50 text-orange-600 border-orange-100'
-              }`}>
-                {webdavUrl ? '已配置' : '未连接'}
-              </span>
+              <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                <span className={`px-2.5 py-0.5 font-bold text-[10px] rounded-full border ${
+                  webdavUrl
+                    ? 'bg-green-50 text-green-600 border-green-100'
+                    : 'bg-orange-50 text-orange-600 border-orange-100'
+                }`}>
+                  {webdavUrl ? '已配置' : '未连接'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleResetWebdavSettings}
+                  className="py-1 px-2.5 bg-black/[0.04] hover:bg-black/[0.08] active:scale-95 text-on-surface text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                  title="仅清空 WebDAV 地址、账号与自动同步开关"
+                >
+                  <span className="material-symbols-outlined text-[13px]">restart_alt</span>
+                  重置同步
+                </button>
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -501,7 +529,21 @@ interface SettingsProps {
 
           {/* 2. 通用学习偏好设置 */}
           <section className="apple-card rounded-2xl p-6 bg-white/80 transition-all hover:shadow-md">
-            <h3 className="font-bold text-base text-on-surface mb-4">学习专注偏好</h3>
+            <div className="flex justify-between items-start gap-4 mb-4 flex-wrap">
+              <div>
+                <h3 className="font-bold text-base text-on-surface">学习专注偏好</h3>
+                <p className="text-xs text-on-surface-variant mt-0.5">控制自动暂停、闲置检测与连播行为</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleResetLearningSettings}
+                className="py-1 px-2.5 bg-black/[0.04] hover:bg-black/[0.08] active:scale-95 text-on-surface text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
+                title="仅恢复学习偏好默认值"
+              >
+                <span className="material-symbols-outlined text-[13px]">restart_alt</span>
+                重置偏好
+              </button>
+            </div>
             
             <div className="space-y-5">
               <div>
@@ -565,11 +607,23 @@ interface SettingsProps {
 
           {/* 3. 本地数据路径管理 */}
           <section className="apple-card rounded-2xl p-6 bg-white/80 transition-all hover:shadow-md">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center gap-3 mb-4 flex-wrap">
               <h3 className="font-bold text-base text-on-surface">本地数据路径管理</h3>
-              <span className="text-xs font-bold text-primary bg-primary/5 px-2.5 py-1 rounded-lg">
-                数据大小: {storageSize}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                <span className="text-xs font-bold text-primary bg-primary/5 px-2.5 py-1 rounded-lg">
+                  数据大小: {storageSize}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleResetStoragePathToDefault}
+                  disabled={isMigrating || (!!defaultAppPath && storagePath === defaultAppPath)}
+                  className="py-1 px-2.5 bg-black/[0.04] hover:bg-black/[0.08] active:scale-95 text-on-surface text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0 whitespace-nowrap"
+                  title="将数据迁回默认 AppData 目录，并恢复默认存储路径"
+                >
+                  <span className="material-symbols-outlined text-[13px]">move_down</span>
+                  {isMigrating ? '处理中...' : '迁回默认路径'}
+                </button>
+              </div>
             </div>
             
             <div className="space-y-4">
@@ -653,7 +707,7 @@ interface SettingsProps {
               </div>
 
               <p className="text-[10px] text-on-surface-variant/80 leading-relaxed pt-1">
-                提示：默认保存在系统 AppData 目录下。修改路径可以将学习进度、配置等存放到您的云同步同步盘或其它目录。在一键重置设置时，存储路径也会一并恢复为默认。
+                提示：默认保存在系统 AppData 目录下。存储路径不会跟随其它设置重置；需要恢复默认目录时，请在此模块单独执行迁回默认路径，程序会先迁移学习数据再切换。
               </p>
             </div>
           </section>
@@ -663,9 +717,20 @@ interface SettingsProps {
         <div className="space-y-6">
           {/* 3. 系统自定义快捷键设置 */}
           <section className="apple-card rounded-2xl p-6 bg-white/80 transition-all hover:shadow-md">
-            <div className="mb-4">
-              <h3 className="font-bold text-base text-on-surface">系统自定义快捷键</h3>
-              <p className="text-xs text-on-surface-variant mt-0.5">点击右侧按键卡片即可进入录制状态，按下键盘上的任意按键进行重新绑定</p>
+            <div className="flex justify-between items-start gap-4 mb-4 flex-wrap">
+              <div>
+                <h3 className="font-bold text-base text-on-surface">系统自定义快捷键</h3>
+                <p className="text-xs text-on-surface-variant mt-0.5">点击右侧按键卡片即可进入录制状态，按下键盘上的任意按键进行重新绑定</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleResetHotkeys}
+                className="py-1 px-2.5 bg-black/[0.04] hover:bg-black/[0.08] active:scale-95 text-on-surface text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
+                title="仅恢复可自定义快捷键默认值"
+              >
+                <span className="material-symbols-outlined text-[13px]">keyboard_return</span>
+                重置快捷键
+              </button>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">

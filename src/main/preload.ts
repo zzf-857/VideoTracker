@@ -37,7 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   migrateStorage: (newPath: string, moveData: boolean) => ipcRenderer.invoke('db:migrateStorage', newPath, moveData),
   openStorageFolder: () => ipcRenderer.invoke('db:openStorageFolder'),
   getStorageSize: () => ipcRenderer.invoke('db:getStorageSize'),
-  resetStoragePath: () => ipcRenderer.invoke('db:resetStoragePath'),
+  resetStoragePath: (moveData = true) => ipcRenderer.invoke('db:resetStoragePath', { moveData }),
   openDefaultAppFolder: () => ipcRenderer.invoke('db:openDefaultAppFolder'),
   getDefaultAppPath: () => ipcRenderer.invoke('db:getDefaultAppPath'),
 

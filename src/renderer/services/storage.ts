@@ -119,6 +119,10 @@ export function getLocalDateString(date: Date = new Date()): string {
 class StorageService {
   private cache: AppDataStore | null = null;
 
+  clearCache(): void {
+    this.cache = null;
+  }
+
   async loadData(): Promise<AppDataStore> {
     if (this.cache) return this.cache;
 
