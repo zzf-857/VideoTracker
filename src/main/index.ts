@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as crypto from 'crypto';
-import { getSubtitleMimeType, getSubtitleTypeFromPath } from '../renderer/services/subtitles';
+import { getSubtitleMimeType, getSubtitleTypeFromPath, pickAutoMatchedSubtitle } from '../renderer/services/subtitles';
 
 let mainWindow: BrowserWindow | null = null;
 let streamServer: http.Server | null = null;
@@ -537,6 +537,35 @@ app.whenReady().then(() => {
     return selectedPath;
   });
 
+  // 自动识别当前视频同目录下的字幕文件
+  ipcMain.handle('subtitle:findForVideo', async (_event, videoPath: string) => {
+    try {
+      if (!videoPath || videoPath.startsWith('http://') || videoPath.startsWith('https://')) {
+        return null;
+      }
+
+      if (!fs.existsSync(videoPath)) {
+        return null;
+      }
+
+      const videoStat = fs.statSync(videoPath);
+      if (!videoStat.isFile()) {
+        return null;
+      }
+
+      const videoDirectory = path.dirname(videoPath);
+      const subtitleCandidates = fs.readdirSync(videoDirectory, { withFileTypes: true })
+        .filter(entry => entry.isFile())
+        .map(entry => path.join(videoDirectory, entry.name))
+        .filter(candidatePath => Boolean(getSubtitleTypeFromPath(candidatePath)));
+
+      return pickAutoMatchedSubtitle(videoPath, subtitleCandidates);
+    } catch (err) {
+      console.warn('Failed to auto match subtitle:', err);
+      return null;
+    }
+  });
+
   // 扫描文件夹下的视频文件
   ipcMain.handle('fs:scanFolder', async (_event, folderPath: string) => {
     if (!fs.existsSync(folderPath)) return [];
@@ -710,6 +739,16 @@ app.whenReady().then(() => {
 
   // 获取本地字幕文件的 HTTP 访问 URL
   ipcMain.handle('subtitle:getUrl', (_event, subtitlePath: string) => {
+    if (
+      !subtitlePath ||
+      subtitlePath.startsWith('http://') ||
+      subtitlePath.startsWith('https://') ||
+      !getSubtitleTypeFromPath(subtitlePath) ||
+      !fs.existsSync(subtitlePath)
+    ) {
+      return null;
+    }
+
     const base64Path = Buffer.from(subtitlePath).toString('base64');
     return `http://127.0.0.1:${streamPort}/subtitle?path=${encodeURIComponent(base64Path)}`;
   });

@@ -569,16 +569,20 @@ export default function Sidebar({
 
   const hasAvailableSubtitle = (videoPath: string) => {
     const subtitle = subtitlesMap[videoPath];
-    return Boolean(subtitle?.enabled && subtitle.path);
+    return Boolean(subtitle?.path);
   };
 
   const renderSubtitleBadge = (videoPath: string) => {
     if (!hasAvailableSubtitle(videoPath)) return null;
+    const subtitle = subtitlesMap[videoPath];
+    const isEnabled = Boolean(subtitle?.enabled);
 
     return (
       <span
-        className="ml-1 inline-flex h-3 items-center rounded-[3px] bg-primary/10 px-1 text-[7px] font-black leading-none tracking-normal text-primary/80"
-        title="已挂载外部字幕"
+        className={`ml-1 inline-flex h-3 items-center rounded-[3px] px-1 text-[7px] font-black leading-none tracking-normal ${
+          isEnabled ? 'bg-primary/10 text-primary/80' : 'bg-black/5 text-on-surface-variant/70'
+        }`}
+        title={isEnabled ? '字幕已打开' : '字幕已关闭'}
       >
         CC
       </span>

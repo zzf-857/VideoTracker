@@ -50,7 +50,19 @@ export const DEFAULT_SUBTITLE_STYLE: SubtitleStyleSettings = {
 };
 
 const SUPPORTED_SUBTITLE_TYPES = new Set<SubtitleType>(['srt', 'vtt', 'ass']);
+const SUBTITLE_TYPE_PRIORITY: Record<SubtitleType, number> = {
+  srt: 0,
+  vtt: 1,
+  ass: 2
+};
+const SUBTITLE_LANGUAGE_PRIORITY = ['zh', 'cn', 'chs', 'cht', 'hans', 'hant', 'en', 'ja', 'jp', 'ko'];
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+interface ParsedPath {
+  directory: string;
+  fileName: string;
+  stem: string;
+}
 
 function roundTo(value: number, digits: number): number {
   const factor = 10 ** digits;
@@ -102,6 +114,72 @@ export function getSubtitleFileName(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
   const parts = normalized.split('/');
   return parts[parts.length - 1] || filePath;
+}
+
+function parsePathParts(filePath: string): ParsedPath {
+  const normalized = filePath.trim().replace(/\\/g, '/');
+  const slashIndex = normalized.lastIndexOf('/');
+  const directory = slashIndex >= 0 ? normalized.slice(0, slashIndex).toLowerCase() : '';
+  const fileName = slashIndex >= 0 ? normalized.slice(slashIndex + 1) : normalized;
+  const dotIndex = fileName.lastIndexOf('.');
+  const stem = (dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName).toLowerCase();
+
+  return { directory, fileName, stem };
+}
+
+function getLanguageSuffixRank(videoStem: string, subtitleStem: string): number {
+  if (!subtitleStem.startsWith(`${videoStem}.`)) return Number.MAX_SAFE_INTEGER;
+
+  const suffix = subtitleStem.slice(videoStem.length + 1);
+  const tokens = suffix.split(/[\s._-]+/).filter(Boolean);
+  const ranks = tokens.map(token => SUBTITLE_LANGUAGE_PRIORITY.indexOf(token)).filter(rank => rank >= 0);
+
+  if (ranks.length === 0) return SUBTITLE_LANGUAGE_PRIORITY.length;
+  return Math.min(...ranks);
+}
+
+export function pickAutoMatchedSubtitle(videoPath: string, candidatePaths: string[]): string | null {
+  const videoParts = parsePathParts(videoPath);
+  const supportedCandidates = candidatePaths
+    .map(candidatePath => {
+      const type = getSubtitleTypeFromPath(candidatePath);
+      if (!type) return null;
+
+      const subtitleParts = parsePathParts(candidatePath);
+      if (subtitleParts.directory !== videoParts.directory) return null;
+
+      const exactNameRank = subtitleParts.stem === videoParts.stem ? 0 : Number.MAX_SAFE_INTEGER;
+      const languageRank = getLanguageSuffixRank(videoParts.stem, subtitleParts.stem);
+      const relationRank = exactNameRank === 0 ? 0 : languageRank < Number.MAX_SAFE_INTEGER ? 1 : 2;
+
+      return {
+        path: candidatePath,
+        relationRank,
+        languageRank,
+        typeRank: SUBTITLE_TYPE_PRIORITY[type],
+        stableName: subtitleParts.fileName.toLowerCase()
+      };
+    })
+    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate));
+
+  const namedMatches = supportedCandidates
+    .filter(candidate => candidate.relationRank < 2)
+    .sort((a, b) => (
+      a.relationRank - b.relationRank ||
+      a.languageRank - b.languageRank ||
+      a.typeRank - b.typeRank ||
+      a.stableName.localeCompare(b.stableName)
+    ));
+
+  if (namedMatches.length > 0) {
+    return namedMatches[0].path;
+  }
+
+  const fallbackCandidates = supportedCandidates
+    .filter(candidate => candidate.relationRank === 2)
+    .sort((a, b) => a.typeRank - b.typeRank || a.stableName.localeCompare(b.stableName));
+
+  return fallbackCandidates.length === 1 ? fallbackCandidates[0].path : null;
 }
 
 export function getSubtitleMimeType(type: SubtitleType): string {

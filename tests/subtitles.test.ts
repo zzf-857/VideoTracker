@@ -6,6 +6,7 @@ import {
   clampSubtitleOffset,
   createSubtitleAttachment,
   DEFAULT_SUBTITLE_STYLE,
+  pickAutoMatchedSubtitle,
   getSubtitleMimeType,
   getSubtitleTypeFromPath,
   normalizeSubtitleStyle,
@@ -62,6 +63,56 @@ test('creates a persisted subtitle attachment from a local path', () => {
   assert.equal(attachment.encoding, 'utf-8');
   assert.deepEqual(attachment.style, DEFAULT_SUBTITLE_STYLE);
   assert.equal(typeof attachment.lastUsedTime, 'number');
+});
+
+test('creates disabled auto-matched subtitle attachments', () => {
+  const attachment = createSubtitleAttachment('D:\\Course\\lesson.srt', {
+    enabled: false,
+    autoMatched: true,
+    now: 1234
+  });
+
+  assert.equal(attachment.enabled, false);
+  assert.equal(attachment.autoMatched, true);
+  assert.equal(attachment.lastUsedTime, 1234);
+});
+
+test('picks exact same-name subtitles before language-suffixed files', () => {
+  const picked = pickAutoMatchedSubtitle('D:\\Course\\lesson.mp4', [
+    'D:\\Course\\lesson.zh.srt',
+    'D:\\Course\\lesson.ass',
+    'D:\\Course\\notes.txt'
+  ]);
+
+  assert.equal(picked, 'D:\\Course\\lesson.ass');
+});
+
+test('picks preferred language-suffixed subtitles in the same directory', () => {
+  const picked = pickAutoMatchedSubtitle('D:\\Course\\lesson.mp4', [
+    'D:\\Other\\lesson.zh.srt',
+    'D:\\Course\\lesson.en.vtt',
+    'D:\\Course\\lesson.zh.srt'
+  ]);
+
+  assert.equal(picked, 'D:\\Course\\lesson.zh.srt');
+});
+
+test('uses a single subtitle in the same directory as a low-risk fallback', () => {
+  const picked = pickAutoMatchedSubtitle('D:\\Course\\lesson.mp4', [
+    'D:\\Course\\中文字幕.srt',
+    'D:\\Other\\lesson.srt'
+  ]);
+
+  assert.equal(picked, 'D:\\Course\\中文字幕.srt');
+});
+
+test('does not auto-match ambiguous unrelated subtitles', () => {
+  const picked = pickAutoMatchedSubtitle('D:\\Course\\lesson.mp4', [
+    'D:\\Course\\part1.srt',
+    'D:\\Course\\part2.srt'
+  ]);
+
+  assert.equal(picked, null);
 });
 
 test('normalizes subtitle style defaults and clamps unsafe values', () => {

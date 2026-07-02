@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 获取本地字幕文件的 HTTP 访问 URL
   getSubtitleUrl: (subtitlePath: string) => ipcRenderer.invoke('subtitle:getUrl', subtitlePath),
 
+  // 自动识别当前视频同目录下的字幕文件
+  findSubtitleForVideo: (videoPath: string) => ipcRenderer.invoke('subtitle:findForVideo', videoPath),
+
   // 唤起并聚焦主窗口
   focusMainWindow: () => ipcRenderer.invoke('window:focus'),
 

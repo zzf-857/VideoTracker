@@ -766,7 +766,7 @@ export default function Player({
     };
   }, [videoUrl, videoPath, sourceId, nextVideoName]);
 
-  // 1.1 读取当前视频已保存的外部字幕配置
+  // 1.1 读取当前视频已保存的外部字幕配置；无记录时自动匹配同目录字幕
   useEffect(() => {
     let cancelled = false;
 
@@ -778,32 +778,68 @@ export default function Player({
 
     storageService.loadData().then(async data => {
       const savedSubtitle = data.subtitles?.[videoPath];
-      if (!savedSubtitle || !savedSubtitle.enabled) return;
-
       const api = (window as any).electronAPI;
       if (!api?.getSubtitleUrl) {
-        if (!cancelled) setSubtitleError('当前环境不支持本地字幕');
+        if (!cancelled && savedSubtitle?.enabled) setSubtitleError('当前环境不支持本地字幕');
         return;
       }
 
       try {
-        const url = await api.getSubtitleUrl(savedSubtitle.path);
+        let nextAttachment: SubtitleAttachment | null = null;
+        let shouldPersist = false;
+        let shouldNotifyChange = false;
+        let noticeText = '';
+
+        if (savedSubtitle) {
+          nextAttachment = {
+            ...savedSubtitle,
+            offset: clampSubtitleOffset(savedSubtitle.offset ?? 0),
+            style: normalizeSubtitleStyle(savedSubtitle.style)
+          };
+          shouldPersist = JSON.stringify(savedSubtitle.style) !== JSON.stringify(nextAttachment.style)
+            || savedSubtitle.offset !== nextAttachment.offset;
+        } else if (api.findSubtitleForVideo) {
+          const matchedSubtitlePath = await api.findSubtitleForVideo(videoPath);
+          if (matchedSubtitlePath) {
+            nextAttachment = createSubtitleAttachment(matchedSubtitlePath, { autoMatched: true });
+            shouldPersist = true;
+            shouldNotifyChange = true;
+            noticeText = `已自动匹配字幕：${nextAttachment.name}`;
+          }
+        }
+
+        if (!nextAttachment) return;
+
+        const url = await api.getSubtitleUrl(nextAttachment.path);
+        if (!url) {
+          throw new Error('Subtitle file is unavailable');
+        }
         if (cancelled) return;
 
-        const nextAttachment = {
-          ...savedSubtitle,
-          offset: clampSubtitleOffset(savedSubtitle.offset ?? 0),
-          style: normalizeSubtitleStyle(savedSubtitle.style)
-        };
         subtitleAttachmentRef.current = nextAttachment;
         setSubtitleAttachment(nextAttachment);
         setSubtitleUrl(url);
-        if (JSON.stringify(savedSubtitle.style) !== JSON.stringify(nextAttachment.style)) {
-          void storageService.saveSubtitle(videoPath, nextAttachment);
+        if (shouldPersist) {
+          await storageService.saveSubtitle(videoPath, nextAttachment);
+        }
+        if (shouldNotifyChange) {
+          onSubtitleChange?.();
+        }
+        if (noticeText && playerInstanceRef.current) {
+          playerInstanceRef.current.notice.show = noticeText;
         }
       } catch (err) {
         console.warn('Failed to restore subtitle:', err);
-        if (!cancelled) setSubtitleError('字幕文件读取失败');
+        if (!cancelled) {
+          subtitleAttachmentRef.current = null;
+          setSubtitleAttachment(null);
+          setSubtitleUrl('');
+          if (savedSubtitle) {
+            await storageService.deleteSubtitle(videoPath);
+            onSubtitleChange?.();
+          }
+          setSubtitleError('字幕文件读取失败');
+        }
       }
     });
 
@@ -1018,6 +1054,9 @@ export default function Player({
 
       const nextAttachment = createSubtitleAttachment(subtitlePath);
       const nextUrl = await api.getSubtitleUrl(subtitlePath);
+      if (!nextUrl) {
+        throw new Error('Subtitle file is unavailable');
+      }
 
       setSubtitleUrl(nextUrl);
       await persistSubtitleAttachment(nextAttachment, true);
@@ -1030,6 +1069,58 @@ export default function Player({
       setSubtitleError('字幕选择失败');
     } finally {
       setIsSubtitleLoading(false);
+    }
+  };
+
+  const handleToggleSubtitleEnabled = async () => {
+    if (!subtitleAttachment) return;
+
+    const nextEnabled = !subtitleAttachment.enabled;
+    const api = (window as any).electronAPI;
+
+    if (nextEnabled && !subtitleUrl) {
+      if (!api?.getSubtitleUrl) {
+        setSubtitleError('当前环境不支持本地字幕');
+        return;
+      }
+
+      try {
+        const nextUrl = await api.getSubtitleUrl(subtitleAttachment.path);
+        if (!nextUrl) {
+          throw new Error('Subtitle file is unavailable');
+        }
+        setSubtitleUrl(nextUrl);
+      } catch (err) {
+        console.error('Failed to enable subtitle:', err);
+        subtitleAttachmentRef.current = null;
+        setSubtitleAttachment(null);
+        setSubtitleUrl('');
+        await storageService.deleteSubtitle(videoPath);
+        onSubtitleChange?.();
+        setSubtitleError('字幕打开失败');
+        return;
+      }
+    }
+
+    const nextAttachment = {
+      ...subtitleAttachment,
+      enabled: nextEnabled,
+      lastUsedTime: Date.now()
+    };
+
+    if (!nextEnabled) {
+      setIsSubtitleStylePanelOpen(false);
+      const art = playerInstanceRef.current;
+      if (art) {
+        art.subtitle.show = false;
+      }
+    }
+
+    await persistSubtitleAttachment(nextAttachment, true);
+
+    const art = playerInstanceRef.current;
+    if (art) {
+      art.notice.show = nextEnabled ? '字幕已打开' : '字幕已关闭';
     }
   };
 
@@ -1106,57 +1197,74 @@ export default function Player({
 
         {subtitleAttachment && (
           <>
+            <button
+              type="button"
+              onClick={handleToggleSubtitleEnabled}
+              className={`flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-white/15 ${
+                subtitleAttachment.enabled ? 'bg-primary/20 text-primary' : 'text-white/50'
+              }`}
+              title={subtitleAttachment.enabled ? '关闭字幕' : '打开字幕'}
+              aria-label={subtitleAttachment.enabled ? '关闭字幕' : '打开字幕'}
+            >
+              <Captions size={16} />
+            </button>
             <div
-              className="hidden max-w-[180px] items-center gap-1.5 truncate px-1 text-xs font-medium text-white/85 sm:flex"
+              className={`hidden max-w-[180px] items-center gap-1.5 truncate px-1 text-xs font-medium sm:flex ${
+                subtitleAttachment.enabled ? 'text-white/85' : 'text-white/50'
+              }`}
               title={subtitleAttachment.name}
             >
               <Captions size={15} className="shrink-0 text-white/70" />
               <span className="truncate">{subtitleAttachment.name}</span>
             </div>
-            <button
-              type="button"
-              onClick={() => handleChangeSubtitleOffset(-1)}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15"
-              title="字幕提前 1 秒"
-              aria-label="字幕提前 1 秒"
-            >
-              <ChevronLeft size={17} />
-            </button>
-            <span
-              className="min-w-10 text-center text-xs font-semibold tabular-nums text-white/85"
-              title="当前字幕偏移"
-            >
-              {formatSubtitleOffset(subtitleAttachment.offset || 0)}
-            </span>
-            <button
-              type="button"
-              onClick={() => handleChangeSubtitleOffset(1)}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15"
-              title="字幕延后 1 秒"
-              aria-label="字幕延后 1 秒"
-            >
-              <ChevronRight size={17} />
-            </button>
-            <button
-              type="button"
-              onClick={handleResetSubtitleOffset}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15"
-              title="重置字幕偏移"
-              aria-label="重置字幕偏移"
-            >
-              <RotateCcw size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsSubtitleStylePanelOpen(open => !open)}
-              className={`flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15 ${
-                isSubtitleStylePanelOpen ? 'bg-white/15 text-white' : ''
-              }`}
-              title="字幕样式"
-              aria-label="字幕样式"
-            >
-              <SlidersHorizontal size={16} />
-            </button>
+            {subtitleAttachment.enabled && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleChangeSubtitleOffset(-1)}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15"
+                  title="字幕提前 1 秒"
+                  aria-label="字幕提前 1 秒"
+                >
+                  <ChevronLeft size={17} />
+                </button>
+                <span
+                  className="min-w-10 text-center text-xs font-semibold tabular-nums text-white/85"
+                  title="当前字幕偏移"
+                >
+                  {formatSubtitleOffset(subtitleAttachment.offset || 0)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleChangeSubtitleOffset(1)}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15"
+                  title="字幕延后 1 秒"
+                  aria-label="字幕延后 1 秒"
+                >
+                  <ChevronRight size={17} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetSubtitleOffset}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15"
+                  title="重置字幕偏移"
+                  aria-label="重置字幕偏移"
+                >
+                  <RotateCcw size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSubtitleStylePanelOpen(open => !open)}
+                  className={`flex h-8 w-8 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15 ${
+                    isSubtitleStylePanelOpen ? 'bg-white/15 text-white' : ''
+                  }`}
+                  title="字幕样式"
+                  aria-label="字幕样式"
+                >
+                  <SlidersHorizontal size={16} />
+                </button>
+              </>
+            )}
             <button
               type="button"
               onClick={handleClearSubtitle}
@@ -1169,7 +1277,7 @@ export default function Player({
           </>
         )}
       </div>
-      {subtitleAttachment && isSubtitleStylePanelOpen && (
+      {subtitleAttachment?.enabled && isSubtitleStylePanelOpen && (
         <div className="w-[270px] rounded-lg border border-white/10 bg-black/75 p-3 text-white shadow-xl backdrop-blur-xl">
           <div className="space-y-3">
             <label className="block text-[11px] font-semibold text-white/75">
