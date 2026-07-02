@@ -69,8 +69,10 @@ export default function Player({
   const activeChaptersRef = useRef<any[]>(activeChapters);
   const progressGapUpdaterRef = useRef<(() => void) | null>(null);
   const subtitleAttachmentRef = useRef<SubtitleAttachment | null>(null);
+  const subtitleStyleRef = useRef<SubtitleStyleSettings>(DEFAULT_SUBTITLE_STYLE);
   const [isArtReady, setIsArtReady] = useState(false);
   const [subtitleAttachment, setSubtitleAttachment] = useState<SubtitleAttachment | null>(null);
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyleSettings>(DEFAULT_SUBTITLE_STYLE);
   const [subtitleUrl, setSubtitleUrl] = useState('');
   const [subtitleError, setSubtitleError] = useState('');
   const [isSubtitleLoading, setIsSubtitleLoading] = useState(false);
@@ -89,7 +91,7 @@ export default function Player({
     const subtitleElement = art?.template?.$subtitle as HTMLElement | undefined;
     if (!subtitleElement) return;
 
-    const normalizedStyle = normalizeSubtitleStyle(style);
+    const normalizedStyle = normalizeSubtitleStyle(style || subtitleStyleRef.current);
     Object.assign(subtitleElement.style, buildSubtitleContainerStyle(normalizedStyle));
 
     subtitleElement.querySelectorAll<HTMLElement>('.art-subtitle-line').forEach(line => {
@@ -99,14 +101,14 @@ export default function Player({
   };
 
   const persistSubtitleAttachment = async (nextAttachment: SubtitleAttachment, notifyChange = false) => {
-    const normalizedAttachment = {
-      ...nextAttachment,
-      offset: clampSubtitleOffset(nextAttachment.offset || 0),
-      style: normalizeSubtitleStyle(nextAttachment.style)
+    const { style: _legacyStyle, ...attachmentWithoutStyle } = nextAttachment;
+    const normalizedAttachment: SubtitleAttachment = {
+      ...attachmentWithoutStyle,
+      offset: clampSubtitleOffset(nextAttachment.offset || 0)
     };
     subtitleAttachmentRef.current = normalizedAttachment;
     setSubtitleAttachment(normalizedAttachment);
-    applySubtitleStyleToArt(normalizedAttachment.style);
+    applySubtitleStyleToArt(subtitleStyleRef.current);
     await storageService.saveSubtitle(videoPath, normalizedAttachment);
     if (notifyChange) {
       onSubtitleChange?.();
@@ -120,21 +122,17 @@ export default function Player({
     const currentAttachment = subtitleAttachmentRef.current;
     if (!currentAttachment) return;
 
-    const nextAttachment = {
-      ...currentAttachment,
-      style: normalizeSubtitleStyle({
-        ...currentAttachment.style,
-        ...styleUpdates
-      }),
-      lastUsedTime: Date.now()
-    };
+    const nextStyle = normalizeSubtitleStyle({
+      ...subtitleStyleRef.current,
+      ...styleUpdates
+    });
 
-    subtitleAttachmentRef.current = nextAttachment;
-    applySubtitleStyleToArt(nextAttachment.style);
+    subtitleStyleRef.current = nextStyle;
+    applySubtitleStyleToArt(nextStyle);
 
     if (shouldPersist) {
-      setSubtitleAttachment(nextAttachment);
-      void storageService.saveSubtitle(videoPath, nextAttachment);
+      setSubtitleStyle(nextStyle);
+      void storageService.saveSubtitleStyle(nextStyle);
     }
   };
 
@@ -263,7 +261,7 @@ export default function Player({
     subtitleElement?.addEventListener('pointerdown', handleSubtitlePointerDown);
 
     art.on('subtitleAfterUpdate', () => {
-      applySubtitleStyleToArt(subtitleAttachmentRef.current?.style);
+      applySubtitleStyleToArt(subtitleStyleRef.current);
     });
 
     // 物理进度条分割线绘制
@@ -778,6 +776,12 @@ export default function Player({
 
     storageService.loadData().then(async data => {
       const savedSubtitle = data.subtitles?.[videoPath];
+      const globalSubtitleStyle = normalizeSubtitleStyle(data.settings.subtitleStyle);
+      subtitleStyleRef.current = globalSubtitleStyle;
+      if (!cancelled) {
+        setSubtitleStyle(globalSubtitleStyle);
+      }
+
       const api = (window as any).electronAPI;
       if (!api?.getSubtitleUrl) {
         if (!cancelled && savedSubtitle?.enabled) setSubtitleError('当前环境不支持本地字幕');
@@ -791,13 +795,12 @@ export default function Player({
         let noticeText = '';
 
         if (savedSubtitle) {
+          const { style: legacyStyle, ...subtitleWithoutLegacyStyle } = savedSubtitle;
           nextAttachment = {
-            ...savedSubtitle,
-            offset: clampSubtitleOffset(savedSubtitle.offset ?? 0),
-            style: normalizeSubtitleStyle(savedSubtitle.style)
+            ...subtitleWithoutLegacyStyle,
+            offset: clampSubtitleOffset(savedSubtitle.offset ?? 0)
           };
-          shouldPersist = JSON.stringify(savedSubtitle.style) !== JSON.stringify(nextAttachment.style)
-            || savedSubtitle.offset !== nextAttachment.offset;
+          shouldPersist = Boolean(legacyStyle) || savedSubtitle.offset !== nextAttachment.offset;
         } else if (api.findSubtitleForVideo) {
           const matchedSubtitlePath = await api.findSubtitleForVideo(videoPath);
           if (matchedSubtitlePath) {
@@ -864,11 +867,16 @@ export default function Player({
 
     let cancelled = false;
 
-    art.subtitle.init(buildArtPlayerSubtitleOption(subtitleAttachment, subtitleUrl)).then(() => {
+    const subtitleForPlayer = {
+      ...subtitleAttachment,
+      style: subtitleStyleRef.current
+    };
+
+    art.subtitle.init(buildArtPlayerSubtitleOption(subtitleForPlayer, subtitleUrl)).then(() => {
       if (cancelled) return;
       art.subtitle.show = true;
       art.subtitleOffset = clampSubtitleOffset(subtitleAttachment.offset);
-      applySubtitleStyleToArt(subtitleAttachment.style);
+      applySubtitleStyleToArt(subtitleStyleRef.current);
       setSubtitleError('');
     }).catch(err => {
       console.error('Failed to load subtitle:', err);
@@ -907,16 +915,16 @@ export default function Player({
   // 1.4 字幕样式变化只更新 DOM，不重新加载字幕文件
   useEffect(() => {
     if (!isArtReady || !subtitleAttachment || !subtitleAttachment.enabled) return;
-    applySubtitleStyleToArt(subtitleAttachment.style);
+    applySubtitleStyleToArt(subtitleStyle);
   }, [
     isArtReady,
     subtitleAttachment?.enabled,
-    subtitleAttachment?.style?.fontSize,
-    subtitleAttachment?.style?.textColor,
-    subtitleAttachment?.style?.backgroundColor,
-    subtitleAttachment?.style?.backgroundOpacity,
-    subtitleAttachment?.style?.positionX,
-    subtitleAttachment?.style?.positionY
+    subtitleStyle.fontSize,
+    subtitleStyle.textColor,
+    subtitleStyle.backgroundColor,
+    subtitleStyle.backgroundOpacity,
+    subtitleStyle.positionX,
+    subtitleStyle.positionY
   ]);
 
   // 2. 同步外部倍速状态变化到播放器
@@ -1177,7 +1185,7 @@ export default function Player({
     await persistSubtitleAttachment(nextAttachment);
   };
 
-  const currentSubtitleStyle = normalizeSubtitleStyle(subtitleAttachment?.style);
+  const currentSubtitleStyle = subtitleStyle;
   const textColorOptions = ['#ffffff', '#ffd700', '#00d4ff'];
   const backgroundColorOptions = ['#000000', '#101820', '#172554', '#7f1d1d'];
 

@@ -1,5 +1,10 @@
 // 检查是否处于 Electron 环境
-import type { SubtitleAttachment } from './subtitles';
+import {
+  DEFAULT_SUBTITLE_STYLE,
+  normalizeSubtitleStyle,
+  type SubtitleAttachment,
+  type SubtitleStyleSettings
+} from './subtitles';
 
 const isElectron = typeof window !== 'undefined' && 'electronAPI' in window;
 
@@ -62,6 +67,7 @@ export interface AppSettings {
   sortOrder?: 'asc' | 'desc'; // 排序顺序
   expandedPaths?: Record<string, boolean>; // 树节点展开路径集
   rightSidebarStatus?: 'closed' | 'footprint' | 'chapters'; // 右侧边栏状态
+  subtitleStyle?: SubtitleStyleSettings; // 全局字幕显示样式
 }
 
 // 统一数据接口
@@ -103,7 +109,8 @@ const DEFAULT_DATA: AppDataStore = {
     viewMode: 'tree',
     sortBy: 'name',
     sortOrder: 'asc',
-    expandedPaths: {}
+    expandedPaths: {},
+    subtitleStyle: DEFAULT_SUBTITLE_STYLE
   },
   timelines: {},
   subtitles: {}
@@ -114,6 +121,16 @@ export function getLocalDateString(date: Date = new Date()): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getLatestLegacySubtitleStyle(subtitles?: Record<string, SubtitleAttachment>): SubtitleStyleSettings | undefined {
+  if (!subtitles) return undefined;
+
+  return Object.values(subtitles).reduce<SubtitleAttachment | undefined>((latest, subtitle) => {
+    if (!subtitle.style) return latest;
+    if (!latest) return subtitle;
+    return (subtitle.lastUsedTime || 0) > (latest.lastUsedTime || 0) ? subtitle : latest;
+  }, undefined)?.style;
 }
 
 class StorageService {
@@ -133,6 +150,8 @@ class StorageService {
       const local = localStorage.getItem('videotracker_app_data');
       this.cache = local ? JSON.parse(local) : { ...DEFAULT_DATA };
     }
+
+    const legacySubtitleStyle = getLatestLegacySubtitleStyle(this.cache?.subtitles || {});
 
     // 确保必要字段存在
     this.cache = {
@@ -162,7 +181,8 @@ class StorageService {
         viewMode: this.cache?.settings?.viewMode ?? 'tree',
         sortBy: this.cache?.settings?.sortBy ?? 'name',
         sortOrder: this.cache?.settings?.sortOrder ?? 'asc',
-        expandedPaths: this.cache?.settings?.expandedPaths ?? {}
+        expandedPaths: this.cache?.settings?.expandedPaths ?? {},
+        subtitleStyle: normalizeSubtitleStyle(this.cache?.settings?.subtitleStyle || legacySubtitleStyle)
       },
       timelines: this.cache?.timelines || {},
       subtitles: this.cache?.subtitles || {},
@@ -233,8 +253,27 @@ class StorageService {
     if (!data.subtitles) {
       data.subtitles = {};
     }
-    data.subtitles[videoPath] = subtitle;
+    const { style: _legacyStyle, ...subtitleWithoutStyle } = subtitle;
+    data.subtitles[videoPath] = subtitleWithoutStyle;
     await this.saveData({ subtitles: data.subtitles });
+  }
+
+  // 快捷方法：保存全局字幕显示样式
+  async saveSubtitleStyle(style: Partial<SubtitleStyleSettings>): Promise<SubtitleStyleSettings> {
+    const data = await this.loadData();
+    const nextStyle = normalizeSubtitleStyle({
+      ...data.settings.subtitleStyle,
+      ...style
+    });
+
+    await this.saveData({
+      settings: {
+        ...data.settings,
+        subtitleStyle: nextStyle
+      }
+    });
+
+    return nextStyle;
   }
 
   // 快捷方法：删除外部字幕配置

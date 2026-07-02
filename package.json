@@ -1,6 +1,6 @@
 {
   "name": "videotracker",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "",
   "main": "dist-electron/index.js",
   "scripts": {
@@ -13,10 +13,11 @@
     "test:migration": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/progressMigration.test.ts --bundle --platform=node --format=cjs --outfile=.temp/progressMigration.test.cjs && node .temp/progressMigration.test.cjs",
     "test:subtitles": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/subtitles.test.ts --bundle --platform=node --format=cjs --outfile=.temp/subtitles.test.cjs && node .temp/subtitles.test.cjs",
     "test:storage-paths": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/storagePaths.test.ts --bundle --platform=node --format=cjs --outfile=.temp/storagePaths.test.cjs && node .temp/storagePaths.test.cjs",
+    "test:storage": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/storage.test.ts --bundle --platform=node --format=cjs --outfile=.temp/storage.test.cjs && node .temp/storage.test.cjs",
     "test:sync-backup": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/syncBackup.test.ts --bundle --platform=node --format=cjs --outfile=.temp/syncBackup.test.cjs && node .temp/syncBackup.test.cjs",
     "test:planning": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/planningStats.test.ts --bundle --platform=node --format=cjs --outfile=.temp/planningStats.test.cjs && node .temp/planningStats.test.cjs",
     "test:player-lifecycle": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/playerChapterLifecycle.test.ts --bundle --platform=node --format=cjs --outfile=.temp/playerChapterLifecycle.test.cjs && node .temp/playerChapterLifecycle.test.cjs",
-    "test": "npm run test:migration && npm run test:subtitles && npm run test:storage-paths && npm run test:sync-backup && npm run test:planning && npm run test:player-lifecycle",
+    "test": "npm run test:migration && npm run test:subtitles && npm run test:storage-paths && npm run test:storage && npm run test:sync-backup && npm run test:planning && npm run test:player-lifecycle",
     "package": "npm run build && electron-builder --win"
   },
   "keywords": [],
