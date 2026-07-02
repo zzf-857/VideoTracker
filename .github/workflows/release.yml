@@ -27,9 +27,7 @@ jobs:
         run: npm ci
 
       - name: Build and Package
-        run: npm run package
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run package -- --publish never
 
       - name: Prepare release notes
         shell: bash

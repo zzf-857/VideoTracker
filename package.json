@@ -64,6 +64,7 @@
     ],
     "win": {
       "icon": "Assets/app.ico",
+      "artifactName": "VideoTracker-${version}.${ext}",
       "target": [
         {
           "target": "nsis",
@@ -80,6 +81,7 @@
       ]
     },
     "nsis": {
+      "artifactName": "VideoTracker-Setup-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": true,
