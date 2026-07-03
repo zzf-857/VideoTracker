@@ -39,6 +39,7 @@ interface PlayerProps {
   pauseOnBlur?: boolean; // 新增：失去焦点自动暂停
   isFinished?: boolean; // 新增：视频当前的已学完状态 (由外部驱动，如手动标记)
   onSubtitleChange?: () => void;
+  subtitleReloadSignal?: number;
 }
 
 export default function Player({
@@ -57,7 +58,8 @@ export default function Player({
   nextVideoName,
   pauseOnBlur = true,
   isFinished = false,
-  onSubtitleChange
+  onSubtitleChange,
+  subtitleReloadSignal = 0
 }: PlayerProps) {
   const artRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<Artplayer | null>(null);
@@ -624,6 +626,7 @@ export default function Player({
       subtitleAttachmentRef.current = nextAttachment;
       setSubtitleAttachment(nextAttachment);
       storageService.saveSubtitle(videoPath, nextAttachment);
+      onSubtitleChange?.();
     });
 
     // 实时更新当前播放时长并节流写入
@@ -902,7 +905,8 @@ export default function Player({
     subtitleAttachment?.name,
     subtitleAttachment?.type,
     subtitleAttachment?.encoding,
-    subtitleAttachment?.enabled
+    subtitleAttachment?.enabled,
+    subtitleReloadSignal
   ]);
 
   // 1.3 字幕偏移变化只更新 offset，不重新加载字幕文件
@@ -1164,7 +1168,7 @@ export default function Player({
       art.notice.show = `字幕偏移：${formatSubtitleOffset(nextOffset)}`;
     }
 
-    await persistSubtitleAttachment(nextAttachment);
+    await persistSubtitleAttachment(nextAttachment, true);
   };
 
   const handleResetSubtitleOffset = async () => {
@@ -1182,7 +1186,7 @@ export default function Player({
       art.notice.show = '字幕偏移已重置';
     }
 
-    await persistSubtitleAttachment(nextAttachment);
+    await persistSubtitleAttachment(nextAttachment, true);
   };
 
   const currentSubtitleStyle = subtitleStyle;

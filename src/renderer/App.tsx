@@ -8,6 +8,7 @@ import Settings from './components/Settings';
 import Analytics from './components/Analytics';
 
 import ChapterSidebar, { Chapter } from './components/ChapterSidebar';
+import SubtitleEditorSidebar from './components/SubtitleEditorSidebar';
 import { useAppData, TreeNode } from './hooks/useAppData';
 import { storageService, MediaSourceConfig } from './services/storage';
 
@@ -57,16 +58,20 @@ export default function App() {
   // 右侧双抽屉展开与缩放状态
   const isFootprintOpen = rightSidebarStatus === 'footprint';
   const isChaptersOpen = rightSidebarStatus === 'chapters' && !!activeVideoPath;
+  const isSubtitleEditorOpen = rightSidebarStatus === 'subtitles' && !!activeVideoPath;
   const [footprintWidth, setFootprintWidth] = useState<number>(320);
   const [chaptersWidth, setChaptersWidth] = useState<number>(340);
+  const [subtitleEditorWidth, setSubtitleEditorWidth] = useState<number>(360);
   const [isFootprintResizing, setIsFootprintResizing] = useState<boolean>(false);
   const [isChaptersResizing, setIsChaptersResizing] = useState<boolean>(false);
+  const [isSubtitleEditorResizing, setIsSubtitleEditorResizing] = useState<boolean>(false);
 
   // 截图生成状态与进度信号
   const [thumbnailUpdateSignal, setThumbnailUpdateSignal] = useState<number>(0);
   const [generationProgress, setGenerationProgress] = useState<{ current: number, total: number } | null>(null);
   const [activeChapters, setActiveChapters] = useState<Chapter[]>([]);
   const [seekSignal, setSeekSignal] = useState<{ seconds: number; time: number } | null>(null);
+  const [subtitleReloadSignal, setSubtitleReloadSignal] = useState<number>(0);
 
   // 自动更新通知状态
   const [updateAvailableVersion, setUpdateAvailableVersion] = useState<string | null>(null);
@@ -88,6 +93,11 @@ export default function App() {
     setIsChaptersResizing(true);
   };
 
+  const startSubtitleEditorResizing = (mouseDownEvent: React.MouseEvent) => {
+    mouseDownEvent.preventDefault();
+    setIsSubtitleEditorResizing(true);
+  };
+
   useEffect(() => {
     const handleMouseMove = (mouseMoveEvent: MouseEvent) => {
       if (isResizing) {
@@ -99,6 +109,9 @@ export default function App() {
       } else if (isChaptersResizing) {
         const newWidth = Math.max(280, Math.min(600, window.innerWidth - mouseMoveEvent.clientX));
         setChaptersWidth(newWidth);
+      } else if (isSubtitleEditorResizing) {
+        const newWidth = Math.max(300, Math.min(640, window.innerWidth - mouseMoveEvent.clientX));
+        setSubtitleEditorWidth(newWidth);
       }
     };
 
@@ -113,9 +126,10 @@ export default function App() {
       setIsResizing(false);
       setIsFootprintResizing(false);
       setIsChaptersResizing(false);
+      setIsSubtitleEditorResizing(false);
     };
 
-    if (isResizing || isFootprintResizing || isChaptersResizing) {
+    if (isResizing || isFootprintResizing || isChaptersResizing || isSubtitleEditorResizing) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     }
@@ -124,7 +138,7 @@ export default function App() {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, isFootprintResizing, isChaptersResizing]);
+  }, [isResizing, isFootprintResizing, isChaptersResizing, isSubtitleEditorResizing]);
 
   // 截图队列句柄
   const queueRef = useRef<number[]>([]);
@@ -402,6 +416,7 @@ export default function App() {
                       pauseOnBlur={appData?.settings.pauseOnBlur}
                       isFinished={activeVideoPath ? (appData?.progress[activeVideoPath]?.isFinished || false) : false}
                       onSubtitleChange={handleRefresh}
+                      subtitleReloadSignal={subtitleReloadSignal}
                     />
                   );
                 })()
@@ -525,6 +540,35 @@ export default function App() {
         </div>
       )}
 
+      {currentTab === 'dashboard' && isSubtitleEditorOpen && (
+        <div 
+          className="h-full relative flex-shrink-0 bg-white/80 backdrop-blur-xl border-l border-black/5 z-30 flex"
+          style={{ 
+            width: subtitleEditorWidth,
+            transition: isSubtitleEditorResizing ? 'none' : 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+        >
+          <div
+            onMouseDown={startSubtitleEditorResizing}
+            className={`w-[6px] absolute top-0 bottom-0 left-0 cursor-col-resize z-50 hover:bg-primary/20 transition-colors ${
+              isSubtitleEditorResizing ? 'bg-primary' : 'bg-transparent'
+            }`}
+          />
+          <div className="p-4 h-full w-full flex flex-col min-h-0">
+            <SubtitleEditorSidebar
+              videoPath={activeVideoPath}
+              currentTime={currentPlayTime}
+              subtitleAttachment={appData?.subtitles?.[activeVideoPath]}
+              refreshSignal={refreshSignal}
+              onSubtitleSaved={() => {
+                setSubtitleReloadSignal(prev => prev + 1);
+                handleRefresh();
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* 最右侧悬浮固定工具 Control Bar (仅在 dashboard Tab 下展示) */}
       {currentTab === 'dashboard' && (
         <div className="h-full w-14 bg-white border-l border-black/5 flex flex-col items-center py-6 gap-5 z-40 relative flex-shrink-0">
@@ -560,6 +604,26 @@ export default function App() {
             title="视频章节"
           >
             <span className="material-symbols-outlined text-[20px]">toc</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (!activeVideoPath) {
+                alert('请先选择视频播放，以使用字幕校对');
+                return;
+              }
+              handleRightSidebarStatusChange(rightSidebarStatus === 'subtitles' ? 'closed' : 'subtitles');
+            }}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+              !activeVideoPath ? 'opacity-40 cursor-not-allowed' : ''
+            } ${
+              isSubtitleEditorOpen 
+                ? 'bg-primary text-white shadow-md shadow-primary/20 scale-105' 
+                : 'bg-black/[0.03] text-on-surface hover:bg-black/[0.08] hover:scale-105 active:scale-95'
+            }`}
+            title="字幕校对"
+          >
+            <span className="material-symbols-outlined text-[20px]">closed_caption</span>
           </button>
         </div>
       )}

@@ -6,11 +6,14 @@ import {
   clampSubtitleOffset,
   createSubtitleAttachment,
   DEFAULT_SUBTITLE_STYLE,
+  findSubtitleCueAtTime,
   pickAutoMatchedSubtitle,
   getSubtitleMimeType,
   getSubtitleTypeFromPath,
   normalizeSubtitleStyle,
-  stepSubtitleOffset
+  parseEditableSubtitleDocument,
+  stepSubtitleOffset,
+  updateSubtitleCueText
 } from '../src/renderer/services/subtitles';
 
 function test(name: string, fn: () => void) {
@@ -181,4 +184,91 @@ test('builds an ArtPlayer subtitle option with strict boolean fields', () => {
   assert.equal(option.style.left, '50%');
   assert.equal(option.style.top, '82%');
   assert.equal(option.onVttLoad('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi'), 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi');
+});
+
+test('parses editable srt cues and locates current cue with subtitle offset', () => {
+  const doc = parseEditableSubtitleDocument(
+    [
+      '1',
+      '00:00:10,000 --> 00:00:12,500',
+      'Hello',
+      'world',
+      '',
+      '2',
+      '00:00:13,000 --> 00:00:15,000',
+      'Next line'
+    ].join('\n'),
+    'srt'
+  );
+
+  assert.equal(doc.cues.length, 2);
+  assert.equal(doc.cues[0].id, '0-10000-12500');
+  assert.equal(doc.cues[0].startTime, 10);
+  assert.equal(doc.cues[0].endTime, 12.5);
+  assert.equal(doc.cues[0].text, 'Hello\nworld');
+  assert.equal(findSubtitleCueAtTime(doc.cues, 9.2, -1)?.id, doc.cues[0].id);
+  assert.equal(findSubtitleCueAtTime(doc.cues, 12.2, 1)?.id, doc.cues[0].id);
+});
+
+test('updates only the text lines of an srt cue and preserves line endings', () => {
+  const source = [
+    '1',
+    '00:00:10,000 --> 00:00:12,500',
+    'Old text',
+    '',
+    '2',
+    '00:00:13,000 --> 00:00:15,000',
+    'Keep me',
+    ''
+  ].join('\r\n');
+  const doc = parseEditableSubtitleDocument(source, 'srt');
+
+  const updated = updateSubtitleCueText(source, 'srt', doc.cues[0].id, 'New text\nSecond row');
+
+  assert.equal(updated, [
+    '1',
+    '00:00:10,000 --> 00:00:12,500',
+    'New text',
+    'Second row',
+    '',
+    '2',
+    '00:00:13,000 --> 00:00:15,000',
+    'Keep me',
+    ''
+  ].join('\r\n'));
+});
+
+test('updates vtt cue text while preserving cue id and timing settings', () => {
+  const source = [
+    'WEBVTT',
+    '',
+    'intro-cue',
+    '00:00:01.000 --> 00:00:03.000 align:start position:10%',
+    'Old caption',
+    '',
+    'NOTE editor should ignore this block',
+    '',
+    '00:00:04.000 --> 00:00:05.000',
+    'Other caption',
+    ''
+  ].join('\n');
+  const doc = parseEditableSubtitleDocument(source, 'vtt');
+
+  assert.equal(doc.cues.length, 2);
+  assert.equal(doc.cues[0].text, 'Old caption');
+  const updated = updateSubtitleCueText(source, 'vtt', doc.cues[0].id, 'Corrected caption');
+
+  assert.equal(updated, [
+    'WEBVTT',
+    '',
+    'intro-cue',
+    '00:00:01.000 --> 00:00:03.000 align:start position:10%',
+    'Corrected caption',
+    '',
+    'NOTE editor should ignore this block',
+    '',
+    '00:00:04.000 --> 00:00:05.000',
+    'Other caption',
+    ''
+  ].join('\n'));
 });

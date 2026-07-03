@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 自动识别当前视频同目录下的字幕文件
   findSubtitleForVideo: (videoPath: string) => ipcRenderer.invoke('subtitle:findForVideo', videoPath),
 
+  // 读取与写回本地 srt/vtt 字幕文件
+  readSubtitleFile: (subtitlePath: string) => ipcRenderer.invoke('subtitle:readFile', subtitlePath),
+  writeSubtitleFile: (subtitlePath: string, content: string) => ipcRenderer.invoke('subtitle:writeFile', { subtitlePath, content }),
+
   // 唤起并聚焦主窗口
   focusMainWindow: () => ipcRenderer.invoke('window:focus'),
 

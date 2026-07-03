@@ -6,6 +6,7 @@ import * as http from 'http';
 import * as crypto from 'crypto';
 import { getSubtitleMimeType, getSubtitleTypeFromPath, pickAutoMatchedSubtitle } from '../renderer/services/subtitles';
 import { resetStoragePathToDefault } from './storagePaths';
+import { readEditableSubtitleFile, writeEditableSubtitleFile } from './subtitleFiles';
 
 let mainWindow: BrowserWindow | null = null;
 let streamServer: http.Server | null = null;
@@ -574,6 +575,14 @@ app.whenReady().then(() => {
       console.warn('Failed to auto match subtitle:', err);
       return null;
     }
+  });
+
+  ipcMain.handle('subtitle:readFile', (_event, subtitlePath: string) => {
+    return readEditableSubtitleFile(subtitlePath);
+  });
+
+  ipcMain.handle('subtitle:writeFile', (_event, payload: { subtitlePath: string; content: string }) => {
+    return writeEditableSubtitleFile(payload?.subtitlePath, payload?.content ?? '');
   });
 
   // 扫描文件夹下的视频文件

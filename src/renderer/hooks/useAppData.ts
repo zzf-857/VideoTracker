@@ -73,7 +73,7 @@ export function useAppData() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
 
   // 右侧边栏状态
-  const [rightSidebarStatus, setRightSidebarStatus] = useState<'closed' | 'footprint' | 'chapters'>('closed');
+  const [rightSidebarStatus, setRightSidebarStatus] = useState<'closed' | 'footprint' | 'chapters' | 'subtitles'>('closed');
 
   // 文件树管理
   const [sources, setSources] = useState<MediaSourceConfig[]>([]);
@@ -233,7 +233,7 @@ export function useAppData() {
     await storageService.updateSettings({ isSidebarCollapsed: collapsed });
   };
 
-  const handleRightSidebarStatusChange = async (status: 'closed' | 'footprint' | 'chapters') => {
+  const handleRightSidebarStatusChange = async (status: 'closed' | 'footprint' | 'chapters' | 'subtitles') => {
     setRightSidebarStatus(status);
     await storageService.updateSettings({ rightSidebarStatus: status });
   };

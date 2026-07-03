@@ -31,6 +31,23 @@ export interface ArtPlayerSubtitleOption {
   onVttLoad: (vtt: string) => string;
 }
 
+export interface EditableSubtitleCue {
+  id: string;
+  index: number;
+  startTime: number;
+  endTime: number;
+  text: string;
+  timingLine: number;
+  textStartLine: number;
+  textEndLine: number;
+}
+
+export interface EditableSubtitleDocument {
+  type: 'srt' | 'vtt';
+  cues: EditableSubtitleCue[];
+  lineEnding: string;
+}
+
 export const MIN_SUBTITLE_OFFSET = -10;
 export const MAX_SUBTITLE_OFFSET = 10;
 export const MIN_SUBTITLE_FONT_SIZE = 14;
@@ -57,6 +74,7 @@ const SUBTITLE_TYPE_PRIORITY: Record<SubtitleType, number> = {
 };
 const SUBTITLE_LANGUAGE_PRIORITY = ['zh', 'cn', 'chs', 'cht', 'hans', 'hant', 'en', 'ja', 'jp', 'ko'];
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+const SUBTITLE_TIMING_PATTERN = /^\s*((?:\d{1,2}:)?\d{1,2}:\d{2}[,.]\d{1,3})\s*-->\s*((?:\d{1,2}:)?\d{1,2}:\d{2}[,.]\d{1,3})(?:\s+.*)?$/;
 
 interface ParsedPath {
   directory: string;
@@ -76,6 +94,47 @@ function formatCssNumber(value: number): string {
 function clampNumber(value: number | undefined, fallback: number, min: number, max: number, digits = 2): number {
   if (!Number.isFinite(value)) return fallback;
   return roundTo(Math.min(max, Math.max(min, value as number)), digits);
+}
+
+function getLineEnding(content: string): string {
+  if (content.includes('\r\n')) return '\r\n';
+  if (content.includes('\r')) return '\r';
+  return '\n';
+}
+
+function splitSubtitleLines(content: string): string[] {
+  return content.split(/\r\n|\n|\r/);
+}
+
+function parseSubtitleTimestamp(timestamp: string): number | null {
+  const parts = timestamp.trim().replace(',', '.').split(':');
+  if (parts.length < 2 || parts.length > 3) return null;
+
+  const secondPart = parts[parts.length - 1];
+  const [wholeSecondsText, fractionText = '0'] = secondPart.split('.');
+  const hours = parts.length === 3 ? Number(parts[0]) : 0;
+  const minutes = Number(parts[parts.length - 2]);
+  const seconds = Number(wholeSecondsText);
+  const milliseconds = Number(fractionText.padEnd(3, '0').slice(0, 3));
+
+  if (![hours, minutes, seconds, milliseconds].every(Number.isFinite)) return null;
+
+  return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+}
+
+function parseTimingLine(line: string): { startTime: number; endTime: number } | null {
+  const match = SUBTITLE_TIMING_PATTERN.exec(line);
+  if (!match) return null;
+
+  const startTime = parseSubtitleTimestamp(match[1]);
+  const endTime = parseSubtitleTimestamp(match[2]);
+  if (startTime === null || endTime === null || endTime < startTime) return null;
+
+  return { startTime, endTime };
+}
+
+function buildEditableSubtitleCueId(index: number, startTime: number, endTime: number): string {
+  return `${index}-${Math.round(startTime * 1000)}-${Math.round(endTime * 1000)}`;
 }
 
 function normalizeHexColor(value: string | undefined, fallback: string): string {
@@ -196,6 +255,85 @@ export function clampSubtitleOffset(offset: number): number {
 
 export function stepSubtitleOffset(currentOffset: number, stepSeconds: number): number {
   return clampSubtitleOffset(currentOffset + stepSeconds);
+}
+
+export function parseEditableSubtitleDocument(content: string, type: SubtitleType): EditableSubtitleDocument {
+  if (type !== 'srt' && type !== 'vtt') {
+    throw new Error('Subtitle editing supports only srt and vtt files');
+  }
+
+  const lines = splitSubtitleLines(content);
+  const cues: EditableSubtitleCue[] = [];
+  let lineIndex = 0;
+
+  while (lineIndex < lines.length) {
+    while (lineIndex < lines.length && lines[lineIndex].trim() === '') {
+      lineIndex += 1;
+    }
+    if (lineIndex >= lines.length) break;
+
+    const blockStartLine = lineIndex;
+    while (lineIndex < lines.length && lines[lineIndex].trim() !== '') {
+      lineIndex += 1;
+    }
+    const blockEndLine = lineIndex;
+    const blockLines = lines.slice(blockStartLine, blockEndLine);
+    const timingOffset = blockLines.findIndex(line => Boolean(parseTimingLine(line)));
+
+    if (timingOffset >= 0) {
+      const timingLine = blockStartLine + timingOffset;
+      const timing = parseTimingLine(lines[timingLine]);
+      if (timing) {
+        const textStartLine = timingLine + 1;
+        const textEndLine = blockEndLine;
+        const cueIndex = cues.length;
+        cues.push({
+          id: buildEditableSubtitleCueId(cueIndex, timing.startTime, timing.endTime),
+          index: cueIndex,
+          startTime: timing.startTime,
+          endTime: timing.endTime,
+          text: lines.slice(textStartLine, textEndLine).join('\n'),
+          timingLine,
+          textStartLine,
+          textEndLine
+        });
+      }
+    }
+  }
+
+  return {
+    type,
+    cues,
+    lineEnding: getLineEnding(content)
+  };
+}
+
+export function updateSubtitleCueText(
+  content: string,
+  type: SubtitleType,
+  cueId: string,
+  nextText: string
+): string {
+  const document = parseEditableSubtitleDocument(content, type);
+  const cue = document.cues.find(item => item.id === cueId);
+  if (!cue) {
+    throw new Error('Subtitle cue not found');
+  }
+
+  const lines = splitSubtitleLines(content);
+  const nextTextLines = nextText.replace(/\r\n|\r/g, '\n').split('\n');
+  lines.splice(cue.textStartLine, cue.textEndLine - cue.textStartLine, ...nextTextLines);
+  return lines.join(document.lineEnding);
+}
+
+export function findSubtitleCueAtTime(
+  cues: EditableSubtitleCue[],
+  currentTime: number,
+  subtitleOffset = 0
+): EditableSubtitleCue | null {
+  if (!Number.isFinite(currentTime)) return null;
+  const effectiveTime = currentTime - clampSubtitleOffset(subtitleOffset);
+  return cues.find(cue => effectiveTime >= cue.startTime && effectiveTime <= cue.endTime) || null;
 }
 
 export function normalizeSubtitleStyle(style?: Partial<SubtitleStyleSettings> | null): SubtitleStyleSettings {

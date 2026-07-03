@@ -66,7 +66,7 @@ export interface AppSettings {
   sortBy?: 'name' | 'size' | 'ext' | 'mtime' | 'duration' | 'shuffle'; // 排序类型
   sortOrder?: 'asc' | 'desc'; // 排序顺序
   expandedPaths?: Record<string, boolean>; // 树节点展开路径集
-  rightSidebarStatus?: 'closed' | 'footprint' | 'chapters'; // 右侧边栏状态
+  rightSidebarStatus?: 'closed' | 'footprint' | 'chapters' | 'subtitles'; // 右侧边栏状态
   subtitleStyle?: SubtitleStyleSettings; // 全局字幕显示样式
 }
 
