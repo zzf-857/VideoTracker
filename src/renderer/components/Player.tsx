@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Artplayer from 'artplayer';
 import { storageService, getEventHotkeyString } from '../services/storage';
-import type { SubtitleAttachment, SubtitleStyleSettings } from '../services/subtitles';
+import type { SubtitleAttachment, SubtitleBatchMatch, SubtitleStyleSettings } from '../services/subtitles';
 import {
   buildSubtitleContainerStyle,
   buildSubtitleLineStyle,
@@ -81,6 +81,7 @@ export default function Player({
   const [isSubtitleStylePanelOpen, setIsSubtitleStylePanelOpen] = useState(false);
   const [isSubtitleDragging, setIsSubtitleDragging] = useState(false);
   const [subtitleToolbarHost, setSubtitleToolbarHost] = useState<HTMLElement | null>(null);
+  const [playerTitleHost, setPlayerTitleHost] = useState<HTMLElement | null>(null);
 
   const formatSubtitleOffset = (offset: number) => {
     const safeOffset = clampSubtitleOffset(offset);
@@ -163,6 +164,7 @@ export default function Player({
     isProgressLoadedRef.current = false;
     setIsArtReady(false);
     setSubtitleToolbarHost(null);
+    setPlayerTitleHost(null);
 
     let isUnmounting = false;
 
@@ -212,6 +214,11 @@ export default function Player({
     toolbarHost.className = 'custom-subtitle-toolbar-host';
     artPlayerElement.appendChild(toolbarHost);
     setSubtitleToolbarHost(toolbarHost);
+
+    const titleHost = document.createElement('div');
+    titleHost.className = 'custom-player-title-host';
+    artPlayerElement.appendChild(titleHost);
+    setPlayerTitleHost(titleHost);
 
     const handleSubtitlePointerDown = (event: PointerEvent) => {
       const currentAttachment = subtitleAttachmentRef.current;
@@ -757,7 +764,9 @@ export default function Player({
 
       subtitleElement?.removeEventListener('pointerdown', handleSubtitlePointerDown);
       setSubtitleToolbarHost(null);
+      setPlayerTitleHost(null);
       toolbarHost.remove();
+      titleHost.remove();
       
       if (art) {
         art.destroy(true);
@@ -1050,6 +1059,67 @@ export default function Player({
     };
   }, []);
 
+  const waitForUiYield = () => new Promise<void>(resolve => {
+    window.setTimeout(resolve, 0);
+  });
+
+  const batchAttachSubtitlesFromDirectory = async (selectedSubtitlePath: string) => {
+    const api = (window as any).electronAPI;
+    if (!api?.findSubtitleMatchesInDirectory) return;
+
+    try {
+      const data = await storageService.loadData();
+      const existingVideoPaths = Object.keys(data.subtitles || {});
+      const matches: SubtitleBatchMatch[] = await api.findSubtitleMatchesInDirectory(
+        videoPath,
+        selectedSubtitlePath,
+        existingVideoPaths
+      );
+      const autoMatches = matches.filter(match => match.videoPath !== videoPath);
+      if (autoMatches.length === 0) return;
+
+      const chunkSize = 40;
+      let attachedCount = 0;
+
+      for (let index = 0; index < autoMatches.length; index += chunkSize) {
+        const chunk = autoMatches.slice(index, index + chunkSize);
+        const latestData = await storageService.loadData();
+        const nextSubtitles = { ...(latestData.subtitles || {}) };
+        let changed = false;
+
+        chunk.forEach(match => {
+          if (nextSubtitles[match.videoPath]?.path) return;
+          try {
+            nextSubtitles[match.videoPath] = createSubtitleAttachment(match.subtitlePath, {
+              autoMatched: true,
+              enabled: true
+            });
+            attachedCount += 1;
+            changed = true;
+          } catch (err) {
+            console.warn('Failed to create auto matched subtitle attachment:', err);
+          }
+        });
+
+        if (changed) {
+          await storageService.saveData({ subtitles: nextSubtitles });
+        }
+
+        await waitForUiYield();
+      }
+
+      if (attachedCount > 0) {
+        onSubtitleChange?.();
+        const art = playerInstanceRef.current;
+        if (art) {
+          art.notice.show = `已自动挂载 ${attachedCount} 个同目录字幕`;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to batch attach subtitles:', err);
+    }
+  };
+
   const handleSelectSubtitle = async () => {
     const api = (window as any).electronAPI;
     if (!api?.selectSubtitleFile || !api?.getSubtitleUrl) {
@@ -1072,6 +1142,7 @@ export default function Player({
 
       setSubtitleUrl(nextUrl);
       await persistSubtitleAttachment(nextAttachment, true);
+      void batchAttachSubtitlesFromDirectory(subtitlePath);
 
       if (playerInstanceRef.current) {
         playerInstanceRef.current.notice.show = `已加载字幕：${nextAttachment.name}`;
@@ -1192,6 +1263,12 @@ export default function Player({
   const currentSubtitleStyle = subtitleStyle;
   const textColorOptions = ['#ffffff', '#ffd700', '#00d4ff'];
   const backgroundColorOptions = ['#000000', '#101820', '#172554', '#7f1d1d'];
+
+  const playerTitle = (
+    <div className="custom-player-title-root" title={videoName}>
+      {videoName}
+    </div>
+  );
 
   const subtitleToolbar = (
     <div className="custom-subtitle-toolbar-root relative flex max-w-[calc(100vw-24px)] flex-col items-start gap-2">
@@ -1384,6 +1461,7 @@ export default function Player({
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden shadow-lg border border-black/5 bg-[#000000]">
       <div ref={artRef} className="w-full h-full" />
+      {playerTitleHost ? createPortal(playerTitle, playerTitleHost) : null}
       {subtitleToolbarHost ? createPortal(subtitleToolbar, subtitleToolbarHost) : null}
     </div>
   );

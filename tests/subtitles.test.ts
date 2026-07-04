@@ -7,6 +7,7 @@ import {
   createSubtitleAttachment,
   DEFAULT_SUBTITLE_STYLE,
   findSubtitleCueAtTime,
+  pickAutoMatchedSubtitlesForVideos,
   pickAutoMatchedSubtitle,
   getSubtitleMimeType,
   getSubtitleTypeFromPath,
@@ -116,6 +117,115 @@ test('does not auto-match ambiguous unrelated subtitles', () => {
   ]);
 
   assert.equal(picked, null);
+});
+
+test('batch fuzzy matches subtitles with course numbers, punctuation, and language suffixes', () => {
+  const matches = pickAutoMatchedSubtitlesForVideos({
+    videoPaths: [
+      'D:\\Course\\9-3 多Agent规划步骤与记忆模型的设计与开发.mp4',
+      'D:\\Course\\9-4 应用任务事件Domain模型的设计与完善.mp4',
+      'D:\\Course\\9-5 LLM结构化输出缺陷与JSON修复解析器开发.mp4'
+    ],
+    subtitlePaths: [
+      'D:\\Course\\09_03 多Agent规划步骤 记忆模型 设计开发.zh.srt',
+      'D:\\Course\\9.4 应用任务事件 Domain模型 设计完善.ass',
+      'D:\\Course\\第09章-05 LLM结构化输出缺陷 JSON修复解析器开发.en.vtt'
+    ]
+  });
+
+  assert.deepEqual(
+    matches.map(match => [match.videoPath, match.subtitlePath]),
+    [
+      [
+        'D:\\Course\\9-3 多Agent规划步骤与记忆模型的设计与开发.mp4',
+        'D:\\Course\\09_03 多Agent规划步骤 记忆模型 设计开发.zh.srt'
+      ],
+      [
+        'D:\\Course\\9-4 应用任务事件Domain模型的设计与完善.mp4',
+        'D:\\Course\\9.4 应用任务事件 Domain模型 设计完善.ass'
+      ],
+      [
+        'D:\\Course\\9-5 LLM结构化输出缺陷与JSON修复解析器开发.mp4',
+        'D:\\Course\\第09章-05 LLM结构化输出缺陷 JSON修复解析器开发.en.vtt'
+      ]
+    ]
+  );
+});
+
+test('batch fuzzy matching skips existing subtitles but lets the manual selection win', () => {
+  const matches = pickAutoMatchedSubtitlesForVideos({
+    videoPaths: [
+      'D:\\Course\\1-1 Intro.mp4',
+      'D:\\Course\\1-2 Setup.mp4'
+    ],
+    subtitlePaths: [
+      'D:\\Course\\manually-picked.srt',
+      'D:\\Course\\1-1 Intro.zh.srt',
+      'D:\\Course\\1-2 Setup.zh.srt'
+    ],
+    existingVideoPaths: [
+      'D:\\Course\\1-1 Intro.mp4',
+      'D:\\Course\\1-2 Setup.mp4'
+    ],
+    manualMatch: {
+      videoPath: 'D:\\Course\\1-1 Intro.mp4',
+      subtitlePath: 'D:\\Course\\manually-picked.srt'
+    }
+  });
+
+  assert.deepEqual(
+    matches.map(match => [match.videoPath, match.subtitlePath]),
+    [['D:\\Course\\1-1 Intro.mp4', 'D:\\Course\\manually-picked.srt']]
+  );
+});
+
+test('batch fuzzy matching never reuses the manually selected subtitle for another video', () => {
+  const matches = pickAutoMatchedSubtitlesForVideos({
+    videoPaths: [
+      'D:\\Course\\1-1 Intro.mp4',
+      'D:\\Course\\1-2 Setup.mp4'
+    ],
+    subtitlePaths: [
+      'D:\\Course\\1-1 Intro.zh.srt',
+      'D:\\Course\\1-2 Setup.zh.srt'
+    ],
+    manualMatch: {
+      videoPath: 'D:\\Course\\1-1 Intro.mp4',
+      subtitlePath: 'D:\\Course\\1-2 Setup.zh.srt'
+    }
+  });
+
+  assert.deepEqual(
+    matches.map(match => [match.videoPath, match.subtitlePath]),
+    [['D:\\Course\\1-1 Intro.mp4', 'D:\\Course\\1-2 Setup.zh.srt']]
+  );
+});
+
+test('batch fuzzy matching supports centralized subtitle folders outside chapter directories', () => {
+  const matches = pickAutoMatchedSubtitlesForVideos({
+    videoPaths: [
+      'D:\\Course\\第10章 工具模块开发\\10-1 本章介绍-工具模块开发.mp4',
+      'D:\\Course\\第10章 工具模块开发\\10-2 bing搜索引擎工具的设计思路与模型定义.mp4'
+    ],
+    subtitlePaths: [
+      'D:\\Course\\外挂字幕\\10-1 本章介绍-工具模块开发_原文.srt',
+      'D:\\Course\\外挂字幕\\10-2 bing搜索引擎工具的设计思路与模型定义_原文.srt'
+    ]
+  });
+
+  assert.deepEqual(
+    matches.map(match => [match.videoPath, match.subtitlePath]),
+    [
+      [
+        'D:\\Course\\第10章 工具模块开发\\10-1 本章介绍-工具模块开发.mp4',
+        'D:\\Course\\外挂字幕\\10-1 本章介绍-工具模块开发_原文.srt'
+      ],
+      [
+        'D:\\Course\\第10章 工具模块开发\\10-2 bing搜索引擎工具的设计思路与模型定义.mp4',
+        'D:\\Course\\外挂字幕\\10-2 bing搜索引擎工具的设计思路与模型定义_原文.srt'
+      ]
+    ]
+  );
 });
 
 test('normalizes subtitle style defaults and clamps unsafe values', () => {

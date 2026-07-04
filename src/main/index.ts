@@ -4,13 +4,157 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as crypto from 'crypto';
-import { getSubtitleMimeType, getSubtitleTypeFromPath, pickAutoMatchedSubtitle } from '../renderer/services/subtitles';
+import {
+  getSubtitleMimeType,
+  getSubtitleTypeFromPath,
+  pickAutoMatchedSubtitle,
+  pickAutoMatchedSubtitlesForVideos
+} from '../renderer/services/subtitles';
 import { resetStoragePathToDefault } from './storagePaths';
 import { readEditableSubtitleFile, writeEditableSubtitleFile } from './subtitleFiles';
 
 let mainWindow: BrowserWindow | null = null;
 let streamServer: http.Server | null = null;
 let streamPort = 30005; // 本地流服务默认端口
+const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mkv', '.ogg', '.avi', '.flv'];
+const SUBTITLE_BATCH_SCAN_LIMIT = 8000;
+const SKIPPED_BATCH_SCAN_DIRECTORIES = new Set(['.git', 'node_modules', 'dist', 'dist-electron', 'dist-package']);
+
+function normalizeLocalPath(filePath: string): string {
+  return path.resolve(filePath).replace(/\\/g, '/').toLowerCase();
+}
+
+function isSameLocalPath(a: string, b: string): boolean {
+  return normalizeLocalPath(a) === normalizeLocalPath(b);
+}
+
+function isPathInside(parentPath: string, childPath: string): boolean {
+  const relative = path.relative(path.resolve(parentPath), path.resolve(childPath));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function getCommonAncestorPath(paths: string[]): string {
+  const resolvedPaths = paths.map(filePath => path.resolve(filePath));
+  if (resolvedPaths.length === 0) return '';
+
+  const firstParsed = path.parse(resolvedPaths[0]);
+  const firstRoot = firstParsed.root;
+  const firstParts = resolvedPaths[0]
+    .slice(firstRoot.length)
+    .split(path.sep)
+    .filter(Boolean);
+  let commonLength = firstParts.length;
+
+  for (const currentPath of resolvedPaths.slice(1)) {
+    const currentParsed = path.parse(currentPath);
+    if (currentParsed.root.toLowerCase() !== firstRoot.toLowerCase()) {
+      return firstRoot;
+    }
+
+    const currentParts = currentPath
+      .slice(currentParsed.root.length)
+      .split(path.sep)
+      .filter(Boolean);
+
+    let index = 0;
+    while (
+      index < commonLength &&
+      index < currentParts.length &&
+      firstParts[index].toLowerCase() === currentParts[index].toLowerCase()
+    ) {
+      index += 1;
+    }
+    commonLength = index;
+  }
+
+  return path.join(firstRoot, ...firstParts.slice(0, commonLength));
+}
+
+function getBatchSubtitleVideoScanTarget(videoPath: string, subtitleDirectory: string): {
+  root: string;
+  recursive: boolean;
+  excludeDirectories: string[];
+} {
+  const videoDirectory = path.dirname(videoPath);
+  if (isSameLocalPath(videoDirectory, subtitleDirectory)) {
+    return { root: videoDirectory, recursive: false, excludeDirectories: [] };
+  }
+
+  const commonRoot = getCommonAncestorPath([videoDirectory, subtitleDirectory]);
+  const subtitleParent = path.dirname(subtitleDirectory);
+  const subtitleDirectoryName = path.basename(subtitleDirectory).toLowerCase();
+  const looksLikeCentralSubtitleDirectory =
+    isSameLocalPath(commonRoot, subtitleParent) ||
+    subtitleDirectoryName.includes('字幕') ||
+    subtitleDirectoryName.includes('subtitle') ||
+    subtitleDirectoryName.includes('subtitles');
+
+  if (
+    commonRoot &&
+    looksLikeCentralSubtitleDirectory &&
+    isPathInside(commonRoot, videoPath) &&
+    isPathInside(commonRoot, subtitleDirectory)
+  ) {
+    return {
+      root: commonRoot,
+      recursive: true,
+      excludeDirectories: [subtitleDirectory]
+    };
+  }
+
+  return { root: videoDirectory, recursive: false, excludeDirectories: [] };
+}
+
+async function collectFilesForSubtitleBatch(
+  rootDirectory: string,
+  isMatch: (filePath: string) => boolean,
+  options: {
+    recursive: boolean;
+    excludeDirectories?: string[];
+    limit?: number;
+  }
+): Promise<string[]> {
+  const results: string[] = [];
+  const stack = [rootDirectory];
+  const excludeDirectoryKeys = new Set(
+    (options.excludeDirectories || []).map(directoryPath => normalizeLocalPath(directoryPath))
+  );
+  const limit = options.limit || SUBTITLE_BATCH_SCAN_LIMIT;
+
+  while (stack.length > 0 && results.length < limit) {
+    const currentDirectory = stack.pop();
+    if (!currentDirectory) continue;
+
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(currentDirectory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (results.length >= limit) break;
+      const fullPath = path.join(currentDirectory, entry.name);
+
+      if (entry.isDirectory()) {
+        if (
+          options.recursive &&
+          !SKIPPED_BATCH_SCAN_DIRECTORIES.has(entry.name) &&
+          !excludeDirectoryKeys.has(normalizeLocalPath(fullPath))
+        ) {
+          stack.push(fullPath);
+        }
+        continue;
+      }
+
+      if (entry.isFile() && isMatch(fullPath)) {
+        results.push(fullPath);
+      }
+    }
+  }
+
+  return results;
+}
 
 // 获取实际数据存储目录绝对路径
 const getStorageDirectory = () => {
@@ -299,7 +443,6 @@ interface FileNode {
 
 function scanDirectory(dirPath: string): FileNode[] {
   const result: FileNode[] = [];
-  const videoExtensions = ['.mp4', '.webm', '.mkv', '.ogg', '.avi', '.flv'];
 
   try {
     const files = fs.readdirSync(dirPath);
@@ -323,7 +466,7 @@ function scanDirectory(dirPath: string): FileNode[] {
       } else {
         // 若是视频文件，加入结果列表
         const ext = path.extname(file).toLowerCase();
-        if (videoExtensions.includes(ext)) {
+        if (VIDEO_EXTENSIONS.includes(ext)) {
           result.push({
             name: file,
             path: fullPath,
@@ -574,6 +717,68 @@ app.whenReady().then(() => {
     } catch (err) {
       console.warn('Failed to auto match subtitle:', err);
       return null;
+    }
+  });
+
+  // 根据用户手动选择的字幕所在目录，批量模糊匹配同目录下未挂载的视频字幕
+  ipcMain.handle('subtitle:findMatchesInDirectory', async (_event, payload: {
+    videoPath?: string;
+    subtitlePath?: string;
+    existingVideoPaths?: string[];
+  }) => {
+    try {
+      const videoPath = payload?.videoPath || '';
+      const subtitlePath = payload?.subtitlePath || '';
+      if (
+        !videoPath ||
+        !subtitlePath ||
+        videoPath.startsWith('http://') ||
+        videoPath.startsWith('https://') ||
+        subtitlePath.startsWith('http://') ||
+        subtitlePath.startsWith('https://') ||
+        !getSubtitleTypeFromPath(subtitlePath) ||
+        !fs.existsSync(subtitlePath)
+      ) {
+        return [];
+      }
+
+      const subtitleStat = await fs.promises.stat(subtitlePath);
+      if (!subtitleStat.isFile()) {
+        return [];
+      }
+
+      const subtitleDirectory = path.dirname(subtitlePath);
+      const videoScanTarget = getBatchSubtitleVideoScanTarget(videoPath, subtitleDirectory);
+      const videoPaths = await collectFilesForSubtitleBatch(
+        videoScanTarget.root,
+        filePath => VIDEO_EXTENSIONS.includes(path.extname(filePath).toLowerCase()),
+        {
+          recursive: videoScanTarget.recursive,
+          excludeDirectories: videoScanTarget.excludeDirectories
+        }
+      );
+      const subtitlePaths = await collectFilesForSubtitleBatch(
+        subtitleDirectory,
+        filePath => Boolean(getSubtitleTypeFromPath(filePath)),
+        { recursive: false }
+      );
+
+      if (!videoPaths.some(candidatePath => isSameLocalPath(candidatePath, videoPath))) {
+        videoPaths.push(videoPath);
+      }
+
+      return pickAutoMatchedSubtitlesForVideos({
+        videoPaths,
+        subtitlePaths,
+        existingVideoPaths: payload?.existingVideoPaths || [],
+        manualMatch: {
+          videoPath,
+          subtitlePath
+        }
+      });
+    } catch (err) {
+      console.warn('Failed to batch match subtitles:', err);
+      return [];
     }
   });
 

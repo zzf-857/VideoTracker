@@ -31,6 +31,23 @@ export interface ArtPlayerSubtitleOption {
   onVttLoad: (vtt: string) => string;
 }
 
+export interface SubtitleBatchMatch {
+  videoPath: string;
+  subtitlePath: string;
+  score: number;
+  reason: 'manual' | 'exact' | 'fuzzy';
+}
+
+export interface SubtitleBatchMatchOptions {
+  videoPaths: string[];
+  subtitlePaths: string[];
+  existingVideoPaths?: Iterable<string>;
+  manualMatch?: {
+    videoPath: string;
+    subtitlePath: string;
+  };
+}
+
 export interface EditableSubtitleCue {
   id: string;
   index: number;
@@ -73,6 +90,31 @@ const SUBTITLE_TYPE_PRIORITY: Record<SubtitleType, number> = {
   ass: 2
 };
 const SUBTITLE_LANGUAGE_PRIORITY = ['zh', 'cn', 'chs', 'cht', 'hans', 'hant', 'en', 'ja', 'jp', 'ko'];
+const SUBTITLE_NOISE_TOKENS = new Set([
+  ...SUBTITLE_LANGUAGE_PRIORITY,
+  'zho',
+  'eng',
+  'sub',
+  'subs',
+  'subtitle',
+  'subtitles',
+  'caption',
+  'captions',
+  'cc',
+  'srt',
+  'vtt',
+  'ass',
+  '字幕',
+  '原文',
+  '中文字幕',
+  '中文',
+  '简中',
+  '简体',
+  '繁中',
+  '繁体',
+  '双语',
+  '中英'
+]);
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const SUBTITLE_TIMING_PATTERN = /^\s*((?:\d{1,2}:)?\d{1,2}:\d{2}[,.]\d{1,3})\s*-->\s*((?:\d{1,2}:)?\d{1,2}:\d{2}[,.]\d{1,3})(?:\s+.*)?$/;
 
@@ -197,6 +239,112 @@ function getLanguageSuffixRank(videoStem: string, subtitleStem: string): number 
   return Math.min(...ranks);
 }
 
+function normalizePathKey(filePath: string): string {
+  return filePath.trim().replace(/\\/g, '/').toLowerCase();
+}
+
+function stripTrailingSubtitleNoise(stem: string): string {
+  let current = stem;
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    const parts = current.split(/[\s._\-()[\]【】]+/).filter(Boolean);
+    if (parts.length <= 1) break;
+
+    const last = parts[parts.length - 1].toLowerCase();
+    if (SUBTITLE_NOISE_TOKENS.has(last)) {
+      parts.pop();
+      current = parts.join(' ');
+      changed = true;
+    }
+  }
+
+  return current;
+}
+
+function normalizeComparableStem(stem: string): string {
+  return stripTrailingSubtitleNoise(stem)
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/&amp;/g, 'and')
+    .replace(/第\s*(\d+)\s*[章节讲课集]/g, '$1')
+    .replace(/[\s._\-()[\]【】《》<>:：,，。!！?？+&/\\|]+/g, '')
+    .replace(/[的与和及]/g, '');
+}
+
+function extractNumberSignature(stem: string): string {
+  const numbers = stem.normalize('NFKC').match(/\d+/g) || [];
+  return numbers
+    .slice(0, 3)
+    .map(part => String(Number(part)))
+    .join('.');
+}
+
+function getBigrams(value: string): string[] {
+  if (value.length <= 1) return value ? [value] : [];
+  const grams: string[] = [];
+  for (let index = 0; index < value.length - 1; index += 1) {
+    grams.push(value.slice(index, index + 2));
+  }
+  return grams;
+}
+
+function diceCoefficient(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+
+  const aGrams = getBigrams(a);
+  const bGrams = getBigrams(b);
+  if (aGrams.length === 0 || bGrams.length === 0) return 0;
+
+  const counts = new Map<string, number>();
+  aGrams.forEach(gram => counts.set(gram, (counts.get(gram) || 0) + 1));
+
+  let intersection = 0;
+  bGrams.forEach(gram => {
+    const count = counts.get(gram) || 0;
+    if (count > 0) {
+      intersection += 1;
+      counts.set(gram, count - 1);
+    }
+  });
+
+  return (2 * intersection) / (aGrams.length + bGrams.length);
+}
+
+function scoreSubtitleMatch(videoPath: string, subtitlePath: string): { score: number; reason: 'exact' | 'fuzzy' } {
+  const videoParts = parsePathParts(videoPath);
+  const subtitleParts = parsePathParts(subtitlePath);
+  if (!getSubtitleTypeFromPath(subtitlePath)) return { score: 0, reason: 'fuzzy' };
+
+  const exactNameRank = subtitleParts.stem === videoParts.stem ? 0 : Number.MAX_SAFE_INTEGER;
+  const languageRank = getLanguageSuffixRank(videoParts.stem, subtitleParts.stem);
+  if (exactNameRank === 0) return { score: 1.3, reason: 'exact' };
+  if (languageRank < Number.MAX_SAFE_INTEGER) return { score: 1.2 - languageRank * 0.01, reason: 'exact' };
+
+  const videoComparable = normalizeComparableStem(videoParts.stem);
+  const subtitleComparable = normalizeComparableStem(subtitleParts.stem);
+  const videoNumbers = extractNumberSignature(videoParts.stem);
+  const subtitleNumbers = extractNumberSignature(subtitleParts.stem);
+
+  if (videoNumbers && subtitleNumbers && videoNumbers !== subtitleNumbers) {
+    return { score: 0, reason: 'fuzzy' };
+  }
+
+  const baseScore = diceCoefficient(videoComparable, subtitleComparable);
+  const numberBoost = videoNumbers && subtitleNumbers && videoNumbers === subtitleNumbers ? 0.18 : 0;
+  const containsBoost = (
+    videoComparable.includes(subtitleComparable) ||
+    subtitleComparable.includes(videoComparable)
+  ) ? 0.1 : 0;
+
+  return {
+    score: Math.min(1.1, baseScore + numberBoost + containsBoost),
+    reason: 'fuzzy'
+  };
+}
+
 export function pickAutoMatchedSubtitle(videoPath: string, candidatePaths: string[]): string | null {
   const videoParts = parsePathParts(videoPath);
   const supportedCandidates = candidatePaths
@@ -239,6 +387,80 @@ export function pickAutoMatchedSubtitle(videoPath: string, candidatePaths: strin
     .sort((a, b) => a.typeRank - b.typeRank || a.stableName.localeCompare(b.stableName));
 
   return fallbackCandidates.length === 1 ? fallbackCandidates[0].path : null;
+}
+
+export function pickAutoMatchedSubtitlesForVideos(options: SubtitleBatchMatchOptions): SubtitleBatchMatch[] {
+  const existingVideoPathSet = new Set(
+    Array.from(options.existingVideoPaths || []).map(pathValue => normalizePathKey(pathValue))
+  );
+  const manualVideoKey = options.manualMatch ? normalizePathKey(options.manualMatch.videoPath) : '';
+  const manualSubtitleKey = options.manualMatch ? normalizePathKey(options.manualMatch.subtitlePath) : '';
+  const matches: SubtitleBatchMatch[] = [];
+  const usedSubtitleKeys = new Set<string>();
+
+  if (
+    options.manualMatch &&
+    getSubtitleTypeFromPath(options.manualMatch.subtitlePath)
+  ) {
+    matches.push({
+      videoPath: options.manualMatch.videoPath,
+      subtitlePath: options.manualMatch.subtitlePath,
+      score: Number.POSITIVE_INFINITY,
+      reason: 'manual'
+    });
+    usedSubtitleKeys.add(manualSubtitleKey);
+  }
+
+  const candidates: SubtitleBatchMatch[] = [];
+
+  options.videoPaths.forEach(videoPath => {
+    const videoKey = normalizePathKey(videoPath);
+    if (videoKey === manualVideoKey) return;
+    if (existingVideoPathSet.has(videoKey)) return;
+
+    let bestMatch: SubtitleBatchMatch | null = null;
+    let secondBestScore = 0;
+
+    options.subtitlePaths.forEach(subtitlePath => {
+      const subtitleKey = normalizePathKey(subtitlePath);
+      if (subtitleKey === manualSubtitleKey) return;
+
+      const { score, reason } = scoreSubtitleMatch(videoPath, subtitlePath);
+      if (score <= 0) return;
+
+      if (!bestMatch || score > bestMatch.score) {
+        secondBestScore = bestMatch?.score || 0;
+        bestMatch = { videoPath, subtitlePath, score, reason };
+      } else if (score > secondBestScore) {
+        secondBestScore = score;
+      }
+    });
+
+    if (!bestMatch) return;
+    const isStrongExact = bestMatch.reason === 'exact';
+    const isConfidentFuzzy = bestMatch.score >= 0.62 && bestMatch.score - secondBestScore >= 0.04;
+    if (isStrongExact || isConfidentFuzzy) {
+      candidates.push(bestMatch);
+    }
+  });
+
+  candidates
+    .sort((a, b) => (
+      b.score - a.score ||
+      a.videoPath.localeCompare(b.videoPath, 'zh-CN')
+    ))
+    .forEach(candidate => {
+      const subtitleKey = normalizePathKey(candidate.subtitlePath);
+      if (usedSubtitleKeys.has(subtitleKey)) return;
+      matches.push(candidate);
+      usedSubtitleKeys.add(subtitleKey);
+    });
+
+  return matches.sort((a, b) => {
+    if (a.reason === 'manual' && b.reason !== 'manual') return -1;
+    if (a.reason !== 'manual' && b.reason === 'manual') return 1;
+    return a.videoPath.localeCompare(b.videoPath, 'zh-CN');
+  });
 }
 
 export function getSubtitleMimeType(type: SubtitleType): string {
