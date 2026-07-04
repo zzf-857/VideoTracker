@@ -187,16 +187,16 @@ body {
 
 .art-video-player .art-notice {
   top: auto !important;
-  right: 16px !important;
+  right: auto !important;
   bottom: 62px !important;
-  left: auto !important;
+  left: 16px !important;
   z-index: 160 !important;
   max-width: min(420px, calc(100% - 32px)) !important;
   transform: none !important;
 }
 
 .art-video-player.art-fullscreen .art-notice {
-  right: 24px !important;
+  left: 24px !important;
   bottom: 76px !important;
 }
 
