@@ -3,6 +3,7 @@ import { storageService, DailyLog, PlayedVideoLog, MediaSourceConfig, getLocalDa
 import {
   buildSevenDayWindow,
   buildSevenDayTweenSteps,
+  calculateActiveStudyDays,
   getOverviewEndDateForSelectedDate,
   parseLocalDateString,
   shiftSevenDayWindowFromEdge
@@ -348,6 +349,7 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
     .map(([dateStr]) => dateStr);
   const maxOverviewSecs = Math.max(...overviewDurations, 1);
   const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  const totalStudyDays = calculateActiveStudyDays(dailyLogs);
 
   const handleOverviewDateClick = (dateStr: string, index: number) => {
     handleSelectDate(dateStr);
@@ -663,7 +665,7 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                 </div>
                 
                 {/* 核心数据指标块，并排展示，填充中间空白 */}
-                <div className="flex items-center gap-10 mt-1">
+                <div className="flex items-center gap-7 mt-1">
                   <div className="flex flex-col">
                     <span className="text-white/40 text-[10px] font-bold tracking-wider uppercase">累计学习时长</span>
                     <div className="flex items-baseline gap-1 mt-1.5">
@@ -674,7 +676,18 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                   
                   {/* 半透明垂直分割线 */}
                   <div className="w-[1px] h-10 bg-white/10 self-center" />
-                  
+
+                  <div className="flex flex-col">
+                    <span className="text-white/40 text-[10px] font-bold tracking-wider uppercase">累计学习总天数</span>
+                    <div className="flex items-baseline gap-1 mt-1.5">
+                      <span className="text-4xl font-extrabold text-primary tracking-tight">{totalStudyDays}</span>
+                      <span className="text-xs text-white/50 font-semibold">天</span>
+                    </div>
+                  </div>
+
+                  {/* 半透明垂直分割线 */}
+                  <div className="w-[1px] h-10 bg-white/10 self-center" />
+
                   <div className="flex flex-col">
                     <span className="text-white/40 text-[10px] font-bold tracking-wider uppercase">历史最长连续</span>
                     <div className="flex items-baseline gap-1 mt-1.5">

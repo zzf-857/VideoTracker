@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   buildSevenDayWindow,
   buildSevenDayTweenSteps,
+  calculateActiveStudyDays,
   getOverviewEndDateForSelectedDate,
   shiftSevenDayWindowFromEdge
 } from '../src/renderer/services/analyticsWindow';
@@ -30,6 +31,14 @@ test('builds a seven day window ending at the selected end date', () => {
 
 test('uses the heatmap selected date as the overview end date', () => {
   assert.equal(getOverviewEndDateForSelectedDate('2026-06-12'), '2026-06-12');
+});
+
+test('counts only days with positive learning duration', () => {
+  assert.equal(calculateActiveStudyDays({
+    '2026-07-01': { totalDuration: 120 },
+    '2026-07-02': { totalDuration: 0 },
+    '2026-07-03': { totalDuration: 1 }
+  }), 2);
 });
 
 test('shifts one day left when the left edge is selected and older records exist', () => {

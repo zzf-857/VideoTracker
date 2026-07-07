@@ -28,6 +28,10 @@ export function getOverviewEndDateForSelectedDate(selectedDate: string): string 
   return selectedDate;
 }
 
+export function calculateActiveStudyDays(logs: Record<string, { totalDuration: number }>): number {
+  return Object.values(logs).filter(log => log.totalDuration > 0).length;
+}
+
 export function shiftSevenDayWindowFromEdge(options: {
   clickedDate: string;
   currentEndDate: string;
