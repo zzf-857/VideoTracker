@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { storageService, MediaSourceConfig, VideoProgress, AppHotkeys, getEventHotkeyString } from '../services/storage';
+import { SUPPRESS_NEXT_PLAYER_BLUR_PAUSE_EVENT } from '../services/playerFocus';
 import type { SubtitleAttachment } from '../services/subtitles';
 import { WebDAVClient, WebDAVFile } from '../services/webdav';
 import CustomSelect from './CustomSelect';
@@ -65,6 +66,10 @@ export default function Sidebar({
     search: 'ctrl+f'
   });
 
+  const suppressNextPlayerBlurPause = () => {
+    window.dispatchEvent(new CustomEvent(SUPPRESS_NEXT_PLAYER_BLUR_PAUSE_EVENT));
+  };
+
   // 加载配置
   useEffect(() => {
     storageService.loadData().then(data => {
@@ -128,6 +133,7 @@ export default function Sidebar({
         e.stopPropagation();
         const searchInput = document.getElementById('sidebar-search-input');
         if (searchInput) {
+          suppressNextPlayerBlurPause();
           searchInput.focus();
           (searchInput as HTMLInputElement).select();
         }
@@ -788,6 +794,8 @@ export default function Sidebar({
                   type="text"
                   placeholder="搜索视频..."
                   value={searchQuery}
+                  onMouseDown={suppressNextPlayerBlurPause}
+                  onFocus={suppressNextPlayerBlurPause}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-white border border-black/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary placeholder-on-surface-variant/40"
                 />

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   buildArtPlayerSubtitleOption,
+  buildCanvasPipSubtitleLines,
   buildSubtitleContainerStyle,
   buildSubtitleLineStyle,
   clampSubtitleOffset,
@@ -294,6 +295,19 @@ test('builds an ArtPlayer subtitle option with strict boolean fields', () => {
   assert.equal(option.style.left, '50%');
   assert.equal(option.style.top, '82%');
   assert.equal(option.onVttLoad('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi'), 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi');
+});
+
+test('wraps canvas picture-in-picture subtitle text to the available width', () => {
+  const lines = buildCanvasPipSubtitleLines(
+    '首先目的学习并掌握不是优酷的相关使用技巧',
+    110,
+    text => text.length * 10
+  );
+
+  assert.deepEqual(lines, [
+    '首先目的学习并掌握不是',
+    '优酷的相关使用技巧'
+  ]);
 });
 
 test('parses editable srt cues and locates current cue with subtitle offset', () => {

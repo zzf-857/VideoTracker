@@ -671,3 +671,32 @@ export function buildArtPlayerSubtitleOption(
     onVttLoad: (vtt: string) => vtt
   };
 }
+
+export function buildCanvasPipSubtitleLines(
+  text: string,
+  maxWidth: number,
+  measureTextWidth: (text: string) => number,
+  maxLines = 3
+): string[] {
+  const normalizedText = text.replace(/\s+/g, ' ').trim();
+  if (!normalizedText) return [];
+
+  const lines: string[] = [];
+  let currentLine = '';
+
+  Array.from(normalizedText).forEach(char => {
+    const nextLine = `${currentLine}${char}`;
+    if (currentLine && measureTextWidth(nextLine) > maxWidth) {
+      lines.push(currentLine);
+      currentLine = char;
+    } else {
+      currentLine = nextLine;
+    }
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines.slice(0, maxLines);
+}

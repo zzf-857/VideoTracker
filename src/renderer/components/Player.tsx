@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Artplayer from 'artplayer';
 import { storageService, getEventHotkeyString } from '../services/storage';
+import {
+  shouldPausePlaybackOnWindowBlur,
+  SUPPRESS_NEXT_PLAYER_BLUR_PAUSE_EVENT
+} from '../services/playerFocus';
 import type { SubtitleAttachment, SubtitleBatchMatch, SubtitleStyleSettings } from '../services/subtitles';
 import {
   buildSubtitleContainerStyle,
@@ -66,9 +70,12 @@ export default function Player({
   const lastTimeRef = useRef<number>(0);
   const durationRef = useRef<number>(0);
   const wasPlayingBeforeBlur = useRef<boolean>(false);
+  const suppressNextBlurPauseRef = useRef<boolean>(false);
   const isInitiallyFinishedRef = useRef<boolean>(false);
   const isProgressLoadedRef = useRef<boolean>(false);
   const activeChaptersRef = useRef<any[]>(activeChapters);
+  const nextVideoNameRef = useRef<string | undefined>(nextVideoName);
+  const onEndedRef = useRef<typeof onEnded>(onEnded);
   const progressGapUpdaterRef = useRef<(() => void) | null>(null);
   const subtitleAttachmentRef = useRef<SubtitleAttachment | null>(null);
   const subtitleStyleRef = useRef<SubtitleStyleSettings>(DEFAULT_SUBTITLE_STYLE);
@@ -151,6 +158,14 @@ export default function Player({
     activeChaptersRef.current = activeChapters;
     progressGapUpdaterRef.current?.();
   }, [activeChapters]);
+
+  useEffect(() => {
+    nextVideoNameRef.current = nextVideoName;
+  }, [nextVideoName]);
+
+  useEffect(() => {
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
 
   // 1. 初始化和销毁 ArtPlayer
   useEffect(() => {
@@ -654,9 +669,10 @@ export default function Player({
         if (onTimeUpdate) onTimeUpdate(currentTime, duration);
 
         // 如果开启了自动连播，且离结束还剩 5 秒以内，提示用户
-        if (nextVideoName && duration - currentTime <= 5 && !hasShownNextNotice) {
+        const upcomingVideoName = nextVideoNameRef.current;
+        if (upcomingVideoName && duration - currentTime <= 5 && !hasShownNextNotice) {
           hasShownNextNotice = true;
-          art.notice.show = `准备自动连播下一个视频：【${nextVideoName}】`;
+          art.notice.show = `准备自动连播下一个视频：【${upcomingVideoName}】`;
         }
 
         // 节流写入：正常播放时每 2 秒保存一次，避免频繁 I/O
@@ -688,14 +704,44 @@ export default function Player({
         isFinished: true
       });
       
-      if (onEnded) onEnded();
+      onEndedRef.current?.();
     });
 
     // 失去/重新获得焦点自动暂停与恢复
-    const handleWindowBlur = () => {
-      if (!pauseOnBlur) return;
+    let suppressBlurPauseTimer: number | null = null;
+    const clearSuppressedBlurPause = () => {
+      suppressNextBlurPauseRef.current = false;
+      if (suppressBlurPauseTimer !== null) {
+        window.clearTimeout(suppressBlurPauseTimer);
+        suppressBlurPauseTimer = null;
+      }
+    };
 
-      if (art && art.playing) {
+    const handleSuppressNextBlurPause = () => {
+      suppressNextBlurPauseRef.current = true;
+      if (suppressBlurPauseTimer !== null) {
+        window.clearTimeout(suppressBlurPauseTimer);
+      }
+      suppressBlurPauseTimer = window.setTimeout(() => {
+        suppressNextBlurPauseRef.current = false;
+        suppressBlurPauseTimer = null;
+      }, 800);
+    };
+
+    const handleWindowBlur = () => {
+      const activeElement = document.activeElement as HTMLElement | null;
+      const shouldPause = shouldPausePlaybackOnWindowBlur({
+        pauseOnBlur,
+        isPlaying: Boolean(art?.playing),
+        suppressNextBlurPause: suppressNextBlurPauseRef.current,
+        activeElementId: activeElement?.id || ''
+      });
+
+      if (suppressNextBlurPauseRef.current) {
+        clearSuppressedBlurPause();
+      }
+
+      if (shouldPause) {
         wasPlayingBeforeBlur.current = true;
         art.pause();
         saveProgressForce(); // 失去焦点暂停并强制保存
@@ -721,6 +767,7 @@ export default function Player({
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
     window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener(SUPPRESS_NEXT_PLAYER_BLUR_PAUSE_EVENT, handleSuppressNextBlurPause);
 
     return () => {
       isUnmounting = true;
@@ -740,6 +787,8 @@ export default function Player({
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener(SUPPRESS_NEXT_PLAYER_BLUR_PAUSE_EVENT, handleSuppressNextBlurPause);
+      clearSuppressedBlurPause();
 
       if (handleMouseMove && progressEl) {
         progressEl.removeEventListener('mousemove', handleMouseMove);
@@ -774,7 +823,7 @@ export default function Player({
       playerInstanceRef.current = null;
       setIsArtReady(false);
     };
-  }, [videoUrl, videoPath, sourceId, nextVideoName]);
+  }, [videoUrl, videoPath, sourceId]);
 
   // 1.1 读取当前视频已保存的外部字幕配置；无记录时自动匹配同目录字幕
   useEffect(() => {

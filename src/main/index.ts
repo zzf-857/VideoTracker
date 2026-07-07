@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -16,9 +16,41 @@ import { readEditableSubtitleFile, writeEditableSubtitleFile } from './subtitleF
 let mainWindow: BrowserWindow | null = null;
 let streamServer: http.Server | null = null;
 let streamPort = 30005; // 本地流服务默认端口
+const APP_USER_MODEL_ID = 'com.videotracker.app';
+const APP_DISPLAY_NAME = 'VideoTracker';
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mkv', '.ogg', '.avi', '.flv'];
 const SUBTITLE_BATCH_SCAN_LIMIT = 8000;
 const SKIPPED_BATCH_SCAN_DIRECTORIES = new Set(['.git', 'node_modules', 'dist', 'dist-electron', 'dist-package']);
+
+app.setName(APP_DISPLAY_NAME);
+if (process.platform === 'win32') {
+  app.setAppUserModelId(APP_USER_MODEL_ID);
+}
+
+function ensureWindowsDevShortcut(iconPath: string) {
+  if (process.platform !== 'win32' || app.isPackaged || !fs.existsSync(iconPath)) return;
+
+  try {
+    const programsPath = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+    fs.mkdirSync(programsPath, { recursive: true });
+    const shortcutPath = path.join(programsPath, `${APP_DISPLAY_NAME} Dev.lnk`);
+
+    const didWriteShortcut = shell.writeShortcutLink(shortcutPath, fs.existsSync(shortcutPath) ? 'replace' : 'create', {
+      target: process.execPath,
+      args: `"${app.getAppPath()}"`,
+      cwd: app.getAppPath(),
+      icon: iconPath,
+      iconIndex: 0,
+      appUserModelId: APP_USER_MODEL_ID,
+      description: `${APP_DISPLAY_NAME} 开发版`
+    });
+    if (!didWriteShortcut) {
+      console.warn('[WindowsIcon] Failed to write dev shortcut:', shortcutPath);
+    }
+  } catch (err) {
+    console.warn('[WindowsIcon] Failed to write dev shortcut:', err);
+  }
+}
 
 function normalizeLocalPath(filePath: string): string {
   return path.resolve(filePath).replace(/\\/g, '/').toLowerCase();
@@ -586,12 +618,16 @@ function setupAutoUpdater() {
 function createWindow() {
   const preloadPath = path.join(__dirname, 'preload.js');
   const iconPath = path.join(__dirname, '../Assets/app.ico');
+  const hasAppIcon = fs.existsSync(iconPath);
+
+  ensureWindowsDevShortcut(iconPath);
 
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    title: APP_DISPLAY_NAME,
     titleBarStyle: 'default', // 标准窗口控制栏，贴合原生质感
-    icon: fs.existsSync(iconPath) ? iconPath : undefined,
+    icon: hasAppIcon ? iconPath : undefined,
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
@@ -599,6 +635,9 @@ function createWindow() {
       backgroundThrottling: false, // 禁用后台限频，确保窗口在失焦/后台时定时器依然精准无阻地走字
     },
   });
+  if (hasAppIcon) {
+    mainWindow.setIcon(iconPath);
+  }
 
   // 开发环境加载 Vite dev server，生产环境加载 dist/index.html
   if (!app.isPackaged) {
