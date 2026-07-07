@@ -17,8 +17,10 @@
     "test:storage": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/storage.test.ts --bundle --platform=node --format=cjs --outfile=.temp/storage.test.cjs && node .temp/storage.test.cjs",
     "test:sync-backup": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/syncBackup.test.ts --bundle --platform=node --format=cjs --outfile=.temp/syncBackup.test.cjs && node .temp/syncBackup.test.cjs",
     "test:planning": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/planningStats.test.ts --bundle --platform=node --format=cjs --outfile=.temp/planningStats.test.cjs && node .temp/planningStats.test.cjs",
+    "test:analytics-window": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/analyticsWindow.test.ts --bundle --platform=node --format=cjs --outfile=.temp/analyticsWindow.test.cjs && node .temp/analyticsWindow.test.cjs",
+    "test:source-ordering": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/sourceOrdering.test.ts --bundle --platform=node --format=cjs --outfile=.temp/sourceOrdering.test.cjs && node .temp/sourceOrdering.test.cjs",
     "test:player-lifecycle": "node -e \"require('fs').mkdirSync('.temp',{recursive:true})\" && esbuild tests/playerChapterLifecycle.test.ts --bundle --platform=node --format=cjs --outfile=.temp/playerChapterLifecycle.test.cjs && node .temp/playerChapterLifecycle.test.cjs",
-    "test": "npm run test:migration && npm run test:subtitles && npm run test:subtitle-files && npm run test:storage-paths && npm run test:storage && npm run test:sync-backup && npm run test:planning && npm run test:player-lifecycle",
+    "test": "npm run test:migration && npm run test:subtitles && npm run test:subtitle-files && npm run test:storage-paths && npm run test:storage && npm run test:sync-backup && npm run test:planning && npm run test:analytics-window && npm run test:source-ordering && npm run test:player-lifecycle",
     "package": "npm run build && electron-builder --win"
   },
   "keywords": [],

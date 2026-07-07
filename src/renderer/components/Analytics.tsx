@@ -1,5 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { storageService, DailyLog, PlayedVideoLog, MediaSourceConfig, getLocalDateString } from '../services/storage';
+import {
+  buildSevenDayWindow,
+  buildSevenDayTweenSteps,
+  getOverviewEndDateForSelectedDate,
+  parseLocalDateString,
+  shiftSevenDayWindowFromEdge
+} from '../services/analyticsWindow';
 import CustomSelect from './CustomSelect';
 
 interface AnalyticsProps {
@@ -47,10 +54,15 @@ const OVERVIEW_STARS = createOverviewStars();
 
 export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) {
   const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLog>>({});
-  const [weeklyDuration, setWeeklyDuration] = useState<number[]>(new Array(7).fill(0)); // 周一到周日学习秒数
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
   const [sources, setSources] = useState<MediaSourceConfig[]>([]);
+  const [overviewEndDate, setOverviewEndDate] = useState<string>(getLocalDateString());
+  const [overviewMotion, setOverviewMotion] = useState<'left' | 'right' | 'none'>('none');
+  const [overviewMotionFlip, setOverviewMotionFlip] = useState(false);
+  const [overviewMotionDuration, setOverviewMotionDuration] = useState(240);
+  const overviewTweenTimerRef = useRef<number | null>(null);
+  const overviewEndDateRef = useRef(overviewEndDate);
   
   // 视图切换：'minute' (分钟) 或 'hour' (小时)
   const [unit, setUnit] = useState<'minute' | 'hour'>('minute');
@@ -89,21 +101,22 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
       }
       setTotalSeconds(totalSecs);
 
-      // 2. 计算最近 7 天的时长（从今天倒推 7 天）
-      const today = new Date();
-      const weekly = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(today.getDate() - i);
-        const dStr = getLocalDateString(d);
-        weekly.push(data.dailyLogs[dStr] ? data.dailyLogs[dStr].totalDuration : 0);
-      }
-      setWeeklyDuration(weekly);
-
-      // 3. 计算历史最长连续学习天数
+      // 2. 计算历史最长连续学习天数
       setLongestStreak(calculateLongestStreak(data.dailyLogs));
     });
   }, [refreshSignal]);
+
+  useEffect(() => {
+    overviewEndDateRef.current = overviewEndDate;
+  }, [overviewEndDate]);
+
+  useEffect(() => {
+    return () => {
+      if (overviewTweenTimerRef.current !== null) {
+        window.clearTimeout(overviewTweenTimerRef.current);
+      }
+    };
+  }, []);
 
   // 全局点击关闭右键菜单
   useEffect(() => {
@@ -279,20 +292,73 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
 
   const displayLogs = getSelectedDateLog();
 
-  const getWeeklyDaysLabel = () => {
-    const labels = [];
-    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      labels.push(weekdays[d.getDay()]);
+  const stopOverviewTween = () => {
+    if (overviewTweenTimerRef.current !== null) {
+      window.clearTimeout(overviewTweenTimerRef.current);
+      overviewTweenTimerRef.current = null;
     }
-    return labels;
   };
 
-  const weeklyDays = getWeeklyDaysLabel();
-  const maxWeeklySecs = Math.max(...weeklyDuration, 1);
+  const tweenOverviewWindowTo = (targetEndDate: string) => {
+    const fromEndDate = overviewEndDateRef.current;
+    if (targetEndDate === fromEndDate) return;
+
+    stopOverviewTween();
+    const steps = buildSevenDayTweenSteps(fromEndDate, targetEndDate);
+    let stepIndex = 0;
+
+    const runStep = () => {
+      const step = steps[stepIndex];
+      if (!step) {
+        setOverviewMotion('none');
+        overviewTweenTimerRef.current = null;
+        return;
+      }
+
+      const visualDuration = Math.max(120, Math.min(420, step.delayMs + 100));
+      overviewEndDateRef.current = step.endDate;
+      setOverviewMotion(step.direction);
+      setOverviewMotionDuration(visualDuration);
+      setOverviewMotionFlip(flip => !flip);
+      setOverviewEndDate(step.endDate);
+
+      stepIndex += 1;
+      overviewTweenTimerRef.current = window.setTimeout(runStep, step.delayMs);
+    };
+
+    runStep();
+  };
+
+  const handleSelectDate = (dateStr: string, options: { syncOverview?: boolean } = {}) => {
+    setSelectedDate(dateStr);
+    const dateYear = parseLocalDateString(dateStr).getFullYear();
+    if (dateYear !== selectedYear) {
+      setSelectedYear(dateYear);
+    }
+
+    if (options.syncOverview) {
+      tweenOverviewWindowTo(getOverviewEndDateForSelectedDate(dateStr));
+    }
+  };
+
+  const overviewDates = buildSevenDayWindow(overviewEndDate);
+  const overviewDurations = overviewDates.map(dateStr => dailyLogs[dateStr]?.totalDuration || 0);
+  const overviewActiveDates = Object.entries(dailyLogs)
+    .filter(([, log]) => log.totalDuration > 0)
+    .map(([dateStr]) => dateStr);
+  const maxOverviewSecs = Math.max(...overviewDurations, 1);
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+  const handleOverviewDateClick = (dateStr: string, index: number) => {
+    handleSelectDate(dateStr);
+    const nextEndDate = shiftSevenDayWindowFromEdge({
+      clickedDate: dateStr,
+      currentEndDate: overviewEndDate,
+      windowDates: overviewDates,
+      availableDateStrings: overviewActiveDates
+    });
+    tweenOverviewWindowTo(nextEndDate);
+  };
 
   // 获取视频来源文案
   const getSourceLabel = (video: PlayedVideoLog) => {
@@ -443,7 +509,7 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
                         title={cell.dateStr ? `${cell.dateStr} : 学习 ${formatValue(cell.duration)} ${getUnitLabel()}` : undefined}
                         onClick={() => {
                           if (cell.dateStr && !cell.isFuture) {
-                            setSelectedDate(cell.dateStr);
+                            handleSelectDate(cell.dateStr, { syncOverview: true });
                           }
                         }}
                       />
@@ -474,38 +540,95 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           {/* 左侧列：柱状图 & 统计概览 */}
           <div className="col-span-12 lg:col-span-5 space-y-6">
-            {/* 最近 7 天趋势图 */}
+            {/* 7天学习状况总览 */}
             <section className="apple-card p-6 rounded-2xl bg-white/80 border border-black/5 shadow-sm transition-shadow hover:shadow-md">
-              <h3 className="font-bold text-sm text-on-surface mb-6">最近 7 天学习趋势 ({getUnitLabel()})</h3>
-              <div className="h-40 flex items-end justify-between gap-3 px-1">
-                {weeklyDuration.map((duration, idx) => {
-                  const heightPercent = Math.max(10, Math.round((duration / maxWeeklySecs) * 100));
-                  const isToday = idx === 6;
+              <div className="flex items-start justify-between gap-3 mb-5">
+                <div>
+                  <h3 className="font-bold text-sm text-on-surface">7天学习状况总览 ({getUnitLabel()})</h3>
+                  <p className="text-[10px] text-on-surface-variant mt-1">
+                    {overviewDates[0]} 至 {overviewDates[overviewDates.length - 1]}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = getLocalDateString();
+                    handleSelectDate(today);
+                    tweenOverviewWindowTo(today);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-primary/5 text-primary text-[10px] font-bold hover:bg-primary/10 transition-colors cursor-pointer"
+                >
+                  回到今天
+                </button>
+              </div>
+              <div className="seven-day-window-viewport">
+                <div
+                  style={{ '--seven-day-duration': `${overviewMotionDuration}ms` } as React.CSSProperties}
+                  className={`seven-day-window ${
+                    overviewMotion === 'none'
+                      ? ''
+                      : `seven-day-window--${overviewMotion}-${overviewMotionFlip ? 'a' : 'b'}`
+                  }`}
+                >
+                <div className="grid grid-cols-7 gap-2 mb-3">
+                  {overviewDates.map((dateStr, idx) => {
+                    const isSelected = dateStr === selectedDate;
+                    const hasLog = (dailyLogs[dateStr]?.totalDuration || 0) > 0;
+                    const date = parseLocalDateString(dateStr);
+                    return (
+                      <button
+                        key={`date-slot-${idx}`}
+                        type="button"
+                        onClick={() => handleOverviewDateClick(dateStr, idx)}
+                        className={`h-9 rounded-lg border text-[10px] font-extrabold transition-all duration-300 cursor-pointer ${
+                          isSelected
+                            ? 'border-primary bg-primary text-white shadow-sm shadow-primary/20 scale-[1.04]'
+                            : hasLog
+                              ? 'border-primary/15 bg-primary/10 text-primary hover:bg-primary/20 hover:-translate-y-0.5'
+                              : 'border-black/5 bg-black/[0.03] text-on-surface-variant hover:bg-black/[0.05]'
+                        }`}
+                        title={`${dateStr}：学习 ${formatValue(dailyLogs[dateStr]?.totalDuration || 0)} ${getUnitLabel()}`}
+                      >
+                        {date.getMonth() + 1}/{date.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="h-40 flex items-end justify-between gap-3 px-1">
+                  {overviewDurations.map((duration, idx) => {
+                    const dateStr = overviewDates[idx];
+                    const heightPercent = duration > 0 ? Math.max(8, Math.round((duration / maxOverviewSecs) * 100)) : 4;
+                    const isSelected = dateStr === selectedDate;
+                    const date = parseLocalDateString(dateStr);
                   return (
-                    <div key={idx} className="flex flex-col items-center gap-2 flex-1 group relative">
+                    <div key={`bar-slot-${idx}`} className="flex flex-col items-center gap-2 flex-1 group relative">
                       {/* 迷你浮动 Tooltip 气泡 */}
                       <div className="absolute bottom-[calc(100%-8px)] left-1/2 -translate-x-1/2 bg-[#1D1D1F] text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-md opacity-0 scale-90 translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 transition-all duration-200 whitespace-nowrap z-20">
-                        {formatValue(duration)} {getUnitLabel()}
+                        {dateStr} · {formatValue(duration)} {getUnitLabel()}
                       </div>
                       
                       {/* 固定高度的容器，让百分比高度生效，并用 justify-end 让柱子从底部向上长 */}
                       <div className="h-28 w-full flex flex-col justify-end">
-                        <div 
+                        <button
+                          type="button"
+                          onClick={() => handleOverviewDateClick(dateStr, idx)}
                           style={{ height: `${heightPercent}%` }}
-                          className={`w-full rounded-md transition-all duration-300 origin-bottom transform cursor-pointer ${
-                            isToday 
-                              ? 'bg-primary shadow-sm shadow-primary/20 hover:scale-x-105 hover:scale-y-105 hover:-translate-y-0.5 hover:shadow-md hover:shadow-primary/30' 
+                          className={`seven-day-bar w-full rounded-md origin-bottom transform cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary shadow-sm shadow-primary/20 scale-x-105 hover:scale-y-105 hover:-translate-y-0.5 hover:shadow-md hover:shadow-primary/30'
                               : 'bg-primary/20 hover:bg-primary/40 hover:scale-x-105 hover:scale-y-105 hover:-translate-y-0.5'
                           }`}
-                          title={`学习 ${formatValue(duration)} ${getUnitLabel()}`}
+                          title={`${dateStr} 学习 ${formatValue(duration)} ${getUnitLabel()}`}
                         />
                       </div>
-                      <span className={`text-[10px] font-semibold transition-colors duration-200 group-hover:text-primary ${isToday ? 'text-primary font-bold' : 'text-on-surface-variant'}`}>
-                        {weeklyDays[idx]}
+                      <span className={`text-[10px] font-semibold transition-colors duration-200 group-hover:text-primary ${isSelected ? 'text-primary font-bold' : 'text-on-surface-variant'}`}>
+                        {weekdays[date.getDay()]}
                       </span>
                     </div>
                   );
                 })}
+                </div>
+                </div>
               </div>
             </section>
 

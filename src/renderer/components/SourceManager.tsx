@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { storageService, MediaSourceConfig } from '../services/storage';
 import { WebDAVClient, WebDAVFile } from '../services/webdav';
+import { moveItemById } from '../services/sourceOrdering';
 
 interface SourceManagerProps {
   refreshSignal: number;
@@ -32,6 +33,8 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [editingSource, setEditingSource] = useState<MediaSourceConfig | null>(null);
+  const [draggingSourceId, setDraggingSourceId] = useState<string | null>(null);
+  const [dragOverSourceId, setDragOverSourceId] = useState<string | null>(null);
 
   const startEditing = (id: string, name: string) => {
     setEditingId(id);
@@ -325,6 +328,39 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
     onRefresh();
   };
 
+  const handleSourceDragStart = (event: React.DragEvent, sourceId: string) => {
+    setDraggingSourceId(sourceId);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', sourceId);
+  };
+
+  const handleSourceDragOver = (event: React.DragEvent, targetId: string) => {
+    if (!draggingSourceId || draggingSourceId === targetId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDragOverSourceId(targetId);
+  };
+
+  const handleSourceDrop = async (event: React.DragEvent, targetId: string) => {
+    event.preventDefault();
+    const draggedId = draggingSourceId || event.dataTransfer.getData('text/plain');
+    setDraggingSourceId(null);
+    setDragOverSourceId(null);
+    if (!draggedId || draggedId === targetId) return;
+
+    const updatedSources = moveItemById(sources, draggedId, targetId);
+    if (updatedSources === sources) return;
+
+    setSources(updatedSources);
+    await storageService.updateSources(updatedSources);
+    onRefresh();
+  };
+
+  const handleSourceDragEnd = () => {
+    setDraggingSourceId(null);
+    setDragOverSourceId(null);
+  };
+
   const resetForm = () => {
     setNewSourceName('');
     setNewSourceType('local');
@@ -343,7 +379,7 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
   };
 
   return (
-    <div className="max-w-[1000px] mx-auto py-8 px-4 h-full overflow-y-auto custom-scrollbar">
+    <div className="w-full max-w-[1500px] mx-auto py-8 px-4 h-full overflow-y-auto custom-scrollbar">
       <header className="flex justify-between items-center mb-8">
         <div>
           <h2 className="text-2xl font-headline font-extrabold text-on-surface tracking-tight">媒体库与挂载源</h2>
@@ -361,9 +397,19 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
       </header>
 
       {/* 挂载源网格 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-6">
         {sources.map(source => (
-          <div key={source.id} className="apple-card rounded-2xl p-5 flex flex-col bg-white/80 hover:shadow-md transition-shadow relative group">
+          <div
+            key={source.id}
+            onDragOver={(event) => handleSourceDragOver(event, source.id)}
+            onDragLeave={() => setDragOverSourceId(current => current === source.id ? null : current)}
+            onDrop={(event) => handleSourceDrop(event, source.id)}
+            className={`apple-card rounded-2xl p-5 flex flex-col bg-white/80 hover:shadow-md transition-all relative group ${
+              draggingSourceId === source.id ? 'opacity-50 scale-[0.98]' : ''
+            } ${
+              dragOverSourceId === source.id ? 'ring-2 ring-primary/60 ring-offset-2 -translate-y-0.5' : ''
+            }`}
+          >
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
@@ -400,6 +446,16 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
               {/* 操作按钮组 */}
               <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
                 <button
+                  type="button"
+                  draggable
+                  onDragStart={(event) => handleSourceDragStart(event, source.id)}
+                  onDragEnd={handleSourceDragEnd}
+                  className="w-8 h-8 rounded-full hover:bg-black/[0.04] text-on-surface-variant flex items-center justify-center transition-all cursor-grab active:cursor-grabbing"
+                  title="拖拽调整顺序"
+                >
+                  <span className="material-symbols-outlined text-[16px]">drag_indicator</span>
+                </button>
+                <button
                   onClick={() => handleStartEditSource(source)}
                   className="w-8 h-8 rounded-full hover:bg-black/[0.04] text-on-surface-variant flex items-center justify-center transition-all cursor-pointer"
                   title="重新配置数据源"
@@ -435,7 +491,7 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
         ))}
 
         {sources.length === 0 && (
-          <div className="col-span-2 py-20 flex flex-col items-center justify-center text-center bg-white/40 border border-dashed border-black/10 rounded-3xl">
+          <div className="col-span-full py-20 flex flex-col items-center justify-center text-center bg-white/40 border border-dashed border-black/10 rounded-3xl">
             <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-3">cloud_off</span>
             <span className="text-sm font-semibold text-on-surface-variant">目前没有任何挂载源</span>
             <p className="text-xs text-on-surface-variant/70 mt-1 max-w-[300px]">
