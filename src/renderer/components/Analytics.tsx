@@ -315,7 +315,7 @@ export default function Analytics({ refreshSignal, onRefresh }: AnalyticsProps) 
         return;
       }
 
-      const visualDuration = Math.max(120, Math.min(420, step.delayMs + 100));
+      const visualDuration = Math.max(140, Math.min(480, step.delayMs + 120));
       overviewEndDateRef.current = step.endDate;
       setOverviewMotion(step.direction);
       setOverviewMotionDuration(visualDuration);
