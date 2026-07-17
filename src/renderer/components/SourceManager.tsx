@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { storageService, MediaSourceConfig } from '../services/storage';
 import { WebDAVClient, WebDAVFile } from '../services/webdav';
 import { moveItemById } from '../services/sourceOrdering';
+import { getSourceDisplayPath } from '../services/sourceDisplayPath';
 
 interface SourceManagerProps {
   refreshSignal: number;
@@ -479,8 +480,8 @@ export default function SourceManager({ refreshSignal, onRefresh }: SourceManage
               </div>
             </div>
 
-            <div className="mt-2 text-xs font-mono text-on-surface-variant truncate bg-black/[0.02] p-2 rounded-lg border border-black/5" title={decodeURIComponent(source.path)}>
-              路径: {decodeURIComponent(source.path)}
+            <div className="mt-2 text-xs font-mono text-on-surface-variant truncate bg-black/[0.02] p-2 rounded-lg border border-black/5" title={getSourceDisplayPath(source)}>
+              路径: {getSourceDisplayPath(source)}
             </div>
 
             <div className="mt-4 pt-3 border-t border-black/5 flex justify-between items-center text-[11px] text-on-surface-variant">
